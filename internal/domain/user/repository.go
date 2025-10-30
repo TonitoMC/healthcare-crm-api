@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tonitomc/healthcare-crm-api/internal/domain/user/models"
-
+	roleModels "github.com/tonitomc/healthcare-crm-api/internal/domain/role/models"
+	userModels "github.com/tonitomc/healthcare-crm-api/internal/domain/user/models"
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
 
@@ -21,9 +21,9 @@ func NewRepository(db *sql.DB) *Repository {
 }
 
 // GetByID retrieves a user by ID
-func (r *Repository) GetByID(id int) (*models.User, error) {
+func (r *Repository) GetByID(id int) (*userModels.User, error) {
 	query := `SELECT id, username, correo, password_hash FROM usuarios WHERE id = $1`
-	var u models.User
+	var u userModels.User
 
 	err := r.db.QueryRow(query, id).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash)
 	if err != nil {
@@ -37,13 +37,13 @@ func (r *Repository) GetByID(id int) (*models.User, error) {
 }
 
 // GetByUsernameOrEmail retrieves a user by username OR email
-func (r *Repository) GetByUsernameOrEmail(identifier string) (*models.User, error) {
+func (r *Repository) GetByUsernameOrEmail(identifier string) (*userModels.User, error) {
 	query := `
 		SELECT id, username, correo, password_hash
 		FROM usuarios
 		WHERE username = $1 OR correo = $1
 	`
-	var u models.User
+	var u userModels.User
 
 	err := r.db.QueryRow(query, identifier).Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash)
 	if err != nil {
@@ -57,7 +57,7 @@ func (r *Repository) GetByUsernameOrEmail(identifier string) (*models.User, erro
 }
 
 // Create inserts a new user into the database
-func (r *Repository) Create(u *models.User) error {
+func (r *Repository) Create(u *userModels.User) error {
 	query := `INSERT INTO usuarios (username, password_hash, correo) VALUES ($1, $2, $3)`
 	_, err := r.db.Exec(query, u.Username, u.PasswordHash, u.Email)
 	if err != nil {
@@ -81,7 +81,7 @@ func (r *Repository) Delete(id int) error {
 	return nil
 }
 
-func (r *Repository) GetRolesAndPermissions(userID int) ([]models.Role, []models.Permission, error) {
+func (r *Repository) GetRolesAndPermissions(userID int) ([]roleModels.Role, []roleModels.Permission, error) {
 	query := `
 	SELECT DISTINCT r.id, r.nombre, r.descripcion,
 	                p.id, p.nombre, p.descripcion
@@ -99,14 +99,14 @@ func (r *Repository) GetRolesAndPermissions(userID int) ([]models.Role, []models
 	}
 	defer rows.Close()
 
-	var roles []models.Role
-	var perms []models.Permission
+	var roles []roleModels.Role
+	var perms []roleModels.Permission
 	roleSeen := make(map[int]bool)
 	permSeen := make(map[int]bool)
 
 	for rows.Next() {
-		var role models.Role
-		var perm models.Permission
+		var role roleModels.Role
+		var perm roleModels.Permission
 
 		if err := rows.Scan(
 			&role.ID, &role.Name, &role.Description,

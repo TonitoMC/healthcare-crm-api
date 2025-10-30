@@ -1,6 +1,13 @@
 package errors
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
+
+// -----------------------------------------------------------------------------
+// Core sentinel errors
+// -----------------------------------------------------------------------------
 
 // Centralized application-level errors.
 // These are returned by repositories and services, then unwrapped by handlers.
@@ -26,3 +33,13 @@ var (
 	ErrIncompleteData      = errors.New("datos incompletos o incorrectos")
 	ErrOperationNotAllowed = errors.New("operación no permitida")
 )
+
+// Wrap helper
+// Wrap adds context, a human-readable sentinel, and an optional verbose internal error.
+// Order: human-readable first → technical detail last.
+func Wrap(context string, public, internal error) error {
+	if internal == nil {
+		return fmt.Errorf("%s: %w", context, public)
+	}
+	return fmt.Errorf("%s: %w: %v", context, public, internal)
+}

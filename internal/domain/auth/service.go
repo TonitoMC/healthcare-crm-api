@@ -7,6 +7,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 
+	roleModels "github.com/tonitomc/healthcare-crm-api/internal/domain/role/models"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/user"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/user/models"
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
@@ -72,7 +73,7 @@ func (s *Service) Login(identifier, password string) (string, error) {
 
 // generateJWT creates a signed JWT token for the user
 
-func (s *Service) generateJWT(u *models.User, roles []models.Role, perms []models.Permission) (string, error) {
+func (s *Service) generateJWT(u *models.User, roles []roleModels.Role, perms []roleModels.Permission) (string, error) {
 	// Flatten roles and permissions into string slices
 	roleNames := make([]string, len(roles))
 	for i, r := range roles {

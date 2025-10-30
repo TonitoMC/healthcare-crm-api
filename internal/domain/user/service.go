@@ -3,7 +3,8 @@ package user
 import (
 	"fmt"
 
-	"github.com/tonitomc/healthcare-crm-api/internal/domain/user/models"
+	roleModels "github.com/tonitomc/healthcare-crm-api/internal/domain/role/models"
+	userModels "github.com/tonitomc/healthcare-crm-api/internal/domain/user/models"
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
 
@@ -27,7 +28,7 @@ func (s *Service) CreateUser(username, email, passwordHash string) error {
 		return fmt.Errorf("CreateUser: %w", appErr.ErrInvalidInput)
 	}
 
-	user := &models.User{
+	user := &userModels.User{
 		Username:     username,
 		Email:        email,
 		PasswordHash: passwordHash,
@@ -41,7 +42,7 @@ func (s *Service) CreateUser(username, email, passwordHash string) error {
 }
 
 // GetByID fetches a user by ID
-func (s *Service) GetByID(id int) (*models.User, error) {
+func (s *Service) GetByID(id int) (*userModels.User, error) {
 	u, err := s.repo.GetByID(id)
 	if err != nil {
 		return nil, fmt.Errorf("GetByID: %w", err)
@@ -50,7 +51,7 @@ func (s *Service) GetByID(id int) (*models.User, error) {
 }
 
 // GetByUsernameOrEmail returns a user by either username or email
-func (s *Service) GetByUsernameOrEmail(identifier string) (*models.User, error) {
+func (s *Service) GetByUsernameOrEmail(identifier string) (*userModels.User, error) {
 	u, err := s.repo.GetByUsernameOrEmail(identifier)
 	if err != nil {
 		return nil, fmt.Errorf("GetByUsernameOrEmail: %w", err)
@@ -66,7 +67,7 @@ func (s *Service) DeleteUser(id int) error {
 	return nil
 }
 
-func (s *Service) GetRolesAndPermissions(userID int) ([]models.Role, []models.Permission, error) {
+func (s *Service) GetRolesAndPermissions(userID int) ([]roleModels.Role, []roleModels.Permission, error) {
 	roles, perms, err := s.repo.GetRolesAndPermissions(userID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("GetRolesAndPermissions: %w", err)
