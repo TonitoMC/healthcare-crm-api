@@ -1,0 +1,19 @@
+# This Dockerfile pulls up the backend using Air, in charge of copying the files.
+# For actual live reloading (since this just copies) a Docker Compose Volume is used.
+FROM golang:1.24.8
+
+RUN go install github.com/air-verse/air@v1.62.0
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# Issues with version control in previous version
+ENV GOFLAGS=-buildvcs=false
+
+EXPOSE 8080 
+
+CMD ["air", "-c", ".air.toml"]
