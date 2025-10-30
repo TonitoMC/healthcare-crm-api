@@ -84,7 +84,7 @@ func (r *Repository) Delete(id int) error {
 func (r *Repository) GetRolesAndPermissions(userID int) ([]models.Role, []models.Permission, error) {
 	query := `
 	SELECT DISTINCT r.id, r.nombre, r.descripcion,
-	                p.id, p.name, p.descripcion
+	                p.id, p.nombre, p.descripcion
 	FROM usuarios u
 	JOIN usuarios_roles ur ON ur.usuario_id = u.id
 	JOIN roles r ON r.id = ur.rol_id
