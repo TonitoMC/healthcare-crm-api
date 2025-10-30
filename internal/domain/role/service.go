@@ -57,15 +57,10 @@ func (s *service) GetRoleByID(id int) (*models.Role, []models.Permission, error)
 }
 
 func (s *service) CreateRole(role *models.Role) error {
-	if role == nil || role.Name == "" {
+	if role == nil || role.Name == "" || role.Description == "" {
 		return appErr.Wrap("roleService.CreateRole", appErr.ErrInvalidInput, nil)
 	}
-
-	if err := s.repo.Create(role); err != nil {
-		return err
-	}
-
-	return nil
+	return s.repo.Create(role)
 }
 
 func (s *service) UpdateRole(role *models.Role) error {

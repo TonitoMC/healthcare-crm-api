@@ -1,4 +1,4 @@
-package test
+package role_test
 
 import (
 	"errors"
@@ -34,13 +34,33 @@ func TestService_CreateRole(t *testing.T) {
 		mockRepo.EXPECT().Create(gomock.Any()).Times(0)
 	})
 
+	t.Run("invalid input (empty name)", func(t *testing.T) {
+		mockRepo, svc, ctrl := setup(t)
+		defer ctrl.Finish()
+
+		err := svc.CreateRole(&models.Role{Name: "", Description: "Handles patients"})
+		require.Error(t, err)
+		require.True(t, errors.Is(err, appErr.ErrInvalidInput))
+		mockRepo.EXPECT().Create(gomock.Any()).Times(0)
+	})
+
+	t.Run("invalid input (empty description)", func(t *testing.T) {
+		mockRepo, svc, ctrl := setup(t)
+		defer ctrl.Finish()
+
+		err := svc.CreateRole(&models.Role{Name: "Doctor", Description: ""})
+		require.Error(t, err)
+		require.True(t, errors.Is(err, appErr.ErrInvalidInput))
+		mockRepo.EXPECT().Create(gomock.Any()).Times(0)
+	})
+
 	t.Run("successfully creates role", func(t *testing.T) {
 		mockRepo, svc, ctrl := setup(t)
 		defer ctrl.Finish()
 
 		mockRepo.EXPECT().Create(gomock.Any()).Return(nil)
 
-		err := svc.CreateRole(&models.Role{Name: "Doctor"})
+		err := svc.CreateRole(&models.Role{Name: "Doctor", Description: "Handles medical consultations"})
 		require.NoError(t, err)
 	})
 
@@ -48,9 +68,11 @@ func TestService_CreateRole(t *testing.T) {
 		mockRepo, svc, ctrl := setup(t)
 		defer ctrl.Finish()
 
-		mockRepo.EXPECT().Create(gomock.Any()).Return(appErr.Wrap("repo.Create", appErr.ErrAlreadyExists, errors.New("duplicate key")))
+		mockRepo.EXPECT().
+			Create(gomock.Any()).
+			Return(appErr.Wrap("repo.Create", appErr.ErrAlreadyExists, errors.New("duplicate key")))
 
-		err := svc.CreateRole(&models.Role{Name: "Admin"})
+		err := svc.CreateRole(&models.Role{Name: "Admin", Description: "Full system access"})
 		require.Error(t, err)
 		require.True(t, errors.Is(err, appErr.ErrAlreadyExists))
 	})
@@ -74,7 +96,9 @@ func TestService_GetRoleByID(t *testing.T) {
 		mockRepo, svc, ctrl := setup(t)
 		defer ctrl.Finish()
 
-		mockRepo.EXPECT().GetByID(99).Return(nil, appErr.Wrap("repo.GetByID", appErr.ErrNotFound, errors.New("no rows")))
+		mockRepo.EXPECT().
+			GetByID(99).
+			Return(nil, appErr.Wrap("repo.GetByID", appErr.ErrNotFound, errors.New("no rows")))
 
 		role, perms, err := svc.GetRoleByID(99)
 		require.Error(t, err)
@@ -87,7 +111,7 @@ func TestService_GetRoleByID(t *testing.T) {
 		mockRepo, svc, ctrl := setup(t)
 		defer ctrl.Finish()
 
-		expectedRole := &models.Role{ID: 1, Name: "Admin"}
+		expectedRole := &models.Role{ID: 1, Name: "Admin", Description: "Full access"}
 		expectedPerms := []models.Permission{{ID: 1, Name: "read-patient"}}
 
 		mockRepo.EXPECT().GetByID(1).Return(expectedRole, nil)
@@ -116,7 +140,9 @@ func TestService_UpdateRolePermissions(t *testing.T) {
 		mockRepo, svc, ctrl := setup(t)
 		defer ctrl.Finish()
 
-		mockRepo.EXPECT().ClearPermissions(1).Return(appErr.Wrap("repo.ClearPermissions", appErr.ErrInternal, errors.New("db error")))
+		mockRepo.EXPECT().
+			ClearPermissions(1).
+			Return(appErr.Wrap("repo.ClearPermissions", appErr.ErrInternal, errors.New("db error")))
 
 		err := svc.UpdateRolePermissions(1, []int{1, 2})
 		require.Error(t, err)

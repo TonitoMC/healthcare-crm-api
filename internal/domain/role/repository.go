@@ -79,10 +79,9 @@ func (r *repository) GetByID(id int) (*models.Role, error) {
 
 // Create inserts a new role into the database.
 func (r *repository) Create(role *models.Role) error {
-	if role == nil || role.Name == "" {
+	if role == nil || role.Name == "" || role.Description == "" {
 		return appErr.Wrap("RoleRepository.Create", appErr.ErrInvalidInput, nil)
 	}
-
 	_, err := r.db.Exec(
 		`INSERT INTO roles (nombre, descripcion) VALUES ($1, $2)`,
 		role.Name, role.Description,
@@ -95,7 +94,7 @@ func (r *repository) Create(role *models.Role) error {
 
 // Update modifies an existing role.
 func (r *repository) Update(role *models.Role) error {
-	if role == nil || role.ID == 0 {
+	if role == nil || role.ID == 0 || role.Description == "" {
 		return appErr.Wrap("RoleRepository.Update", appErr.ErrInvalidInput, nil)
 	}
 
