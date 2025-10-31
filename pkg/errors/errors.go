@@ -5,21 +5,18 @@ import (
 	"fmt"
 )
 
-// -----------------------------------------------------------------------------
-// Core sentinel errors
-// -----------------------------------------------------------------------------
-
-// Centralized application-level errors.
-// These are returned by repositories and services, then unwrapped by handlers.
-// All messages are in Spanish for consistency with frontend and logs.
-
+// Core sentinel errors (global, domain-agnostic)
+// These errors are used across repositories and services, domain handlers
+// & middleware map them into user-facing messages.
 var (
-	// Generic errors
-	ErrNotFound      = errors.New("recurso no encontrado")
-	ErrAlreadyExists = errors.New("el recurso ya existe")
-	ErrInvalidInput  = errors.New("entrada inválida")
-	ErrConflict      = errors.New("conflicto de datos")
-	ErrInternal      = errors.New("error interno del servidor")
+	// Generic application errors
+	ErrInvalidRequest = errors.New("solicitud inválida")
+	ErrInvalidInput   = errors.New("entrada inválida")
+	ErrIncompleteData = errors.New("datos incompletos o incorrectos")
+	ErrNotFound       = errors.New("recurso no encontrado")
+	ErrAlreadyExists  = errors.New("el recurso ya existe")
+	ErrConflict       = errors.New("conflicto de datos")
+	ErrInternal       = errors.New("error interno del servidor")
 
 	// Authentication / authorization errors
 	ErrUnauthorized       = errors.New("no autorizado")
@@ -27,14 +24,10 @@ var (
 	ErrInvalidToken       = errors.New("token inválido o expirado")
 	ErrInvalidCredentials = errors.New("credenciales inválidas")
 
-	// Domain-specific user errors
-	ErrUserNotFound        = errors.New("usuario no encontrado")
-	ErrUserAlreadyExists   = errors.New("usuario ya registrado")
-	ErrIncompleteData      = errors.New("datos incompletos o incorrectos")
+	// Operational / rule violations
 	ErrOperationNotAllowed = errors.New("operación no permitida")
 )
 
-// Wrap helper
 // Wrap adds context, a human-readable sentinel, and an optional verbose internal error.
 // Order: human-readable first → technical detail last.
 func Wrap(context string, public, internal error) error {

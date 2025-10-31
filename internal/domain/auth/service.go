@@ -1,125 +1,166 @@
+// internal/domain/auth/service.go
 package auth
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 
-	roleModels "github.com/tonitomc/healthcare-crm-api/internal/domain/role/models"
-	"github.com/tonitomc/healthcare-crm-api/internal/domain/user"
-	"github.com/tonitomc/healthcare-crm-api/internal/domain/user/models"
+	authModels "github.com/tonitomc/healthcare-crm-api/internal/domain/auth/models"
+	rbacDomain "github.com/tonitomc/healthcare-crm-api/internal/domain/rbac"
+	rbacModels "github.com/tonitomc/healthcare-crm-api/internal/domain/rbac/models"
+	userDomain "github.com/tonitomc/healthcare-crm-api/internal/domain/user"
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
 
-// Service handles authentication and authorization logic
-type Service struct {
-	userService *user.Service
-	jwtSecret   []byte
+// -----------------------------------------------------------------------------
+// Service Interface
+// -----------------------------------------------------------------------------
+
+type Service interface {
+	Register(username, email, password string) error
+	Login(identifier, password string) (string, error)
+	ValidateToken(tokenStr string) (*jwt.Token, *authModels.Claims, error)
 }
 
-// NewService creates a new AuthService
-func NewService(userService *user.Service, jwtSecret string) *Service {
-	return &Service{
-		userService: userService,
-		jwtSecret:   []byte(jwtSecret),
+// -----------------------------------------------------------------------------
+// Implementation
+// -----------------------------------------------------------------------------
+
+type service struct {
+	userService userDomain.Service
+	rbacService rbacDomain.Service
+	jwtSecret   []byte
+	accessTTL   time.Duration
+	issuer      string
+}
+
+// Config allows customizing the Auth service behavior.
+type Config struct {
+	JWTSecret string
+	AccessTTL time.Duration
+	Issuer    string
+}
+
+// NewService constructs a new Auth service.
+func NewService(userSvc userDomain.Service, rbacSvc rbacDomain.Service, cfg Config) Service {
+	if cfg.AccessTTL == 0 {
+		cfg.AccessTTL = 24 * time.Hour
+	}
+	return &service{
+		userService: userSvc,
+		rbacService: rbacSvc,
+		jwtSecret:   []byte(cfg.JWTSecret),
+		accessTTL:   cfg.AccessTTL,
+		issuer:      cfg.Issuer,
 	}
 }
 
-// Register handles user creation and password hashing
-func (s *Service) Register(username, email, password string) error {
+// -----------------------------------------------------------------------------
+// Register / Login / Validate
+// -----------------------------------------------------------------------------
+
+func (s *service) Register(username, email, password string) error {
 	if username == "" || email == "" || password == "" {
-		return fmt.Errorf("Register: %w", appErr.ErrInvalidInput)
+		return appErr.Wrap("AuthService.Register", appErr.ErrInvalidInput, nil)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return fmt.Errorf("Register (hash): %w", err)
+		return appErr.Wrap("AuthService.Register(hash)", appErr.ErrInternal, err)
 	}
 
 	if err := s.userService.CreateUser(username, email, string(hash)); err != nil {
-		return fmt.Errorf("Register: %w", err)
+		return err // already wrapped
 	}
-
 	return nil
 }
 
-// Login validates credentials and returns a JWT if successful
-func (s *Service) Login(identifier, password string) (string, error) {
-	user, err := s.userService.GetByUsernameOrEmail(identifier)
-	if err != nil {
-		return "", fmt.Errorf("Login: %w", appErr.ErrInvalidCredentials)
+func (s *service) Login(identifier, password string) (string, error) {
+	if identifier == "" || password == "" {
+		return "", appErr.Wrap("AuthService.Login", appErr.ErrInvalidInput, nil)
 	}
 
-	// Validate password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		return "", fmt.Errorf("Login (compare): %w", appErr.ErrInvalidCredentials)
+	u, err := s.userService.GetByUsernameOrEmail(identifier)
+	if err != nil {
+		return "", appErr.Wrap("AuthService.Login(user lookup)", appErr.ErrInvalidCredentials, err)
 	}
 
-	// Load roles and permissions for JWT payload
-	roles, perms, err := s.userService.GetRolesAndPermissions(user.ID)
-	if err != nil {
-		return "", fmt.Errorf("Login (roles/perms): %w", err)
+	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)); err != nil {
+		return "", appErr.Wrap("AuthService.Login(compare)", appErr.ErrInvalidCredentials, err)
 	}
 
-	token, err := s.generateJWT(user, roles, perms)
+	rbacCtx, err := s.rbacService.GetUserAccess(u.ID)
 	if err != nil {
-		return "", fmt.Errorf("Login (token): %w", err)
+		return "", appErr.Wrap("AuthService.Login(rbac)", appErr.ErrInternal, err)
+	}
+
+	token, err := s.generateJWT(rbacCtx)
+	if err != nil {
+		return "", appErr.Wrap("AuthService.Login(token)", appErr.ErrInternal, err)
 	}
 
 	return token, nil
 }
 
-// generateJWT creates a signed JWT token for the user
-
-func (s *Service) generateJWT(u *models.User, roles []roleModels.Role, perms []roleModels.Permission) (string, error) {
-	// Flatten roles and permissions into string slices
-	roleNames := make([]string, len(roles))
-	for i, r := range roles {
-		roleNames[i] = r.Name
+func (s *service) ValidateToken(tokenStr string) (*jwt.Token, *authModels.Claims, error) {
+	if tokenStr == "" {
+		return nil, nil, appErr.Wrap("AuthService.ValidateToken", appErr.ErrInvalidToken, nil)
 	}
 
-	permNames := make([]string, len(perms))
-	for i, p := range perms {
-		permNames[i] = p.Name
-	}
+	claims := &authModels.Claims{}
+	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 
-	// Build claims
-	claims := jwt.MapClaims{
-		"user_id":     u.ID,
-		"username":    u.Username,
-		"roles":       roleNames,
-		"permissions": permNames,
-		"exp":         time.Now().Add(24 * time.Hour).Unix(),
-		"iat":         time.Now().Unix(),
-	}
-
-	// Sign token
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString(s.jwtSecret)
-	if err != nil {
-		return "", fmt.Errorf("generateJWT: %w", err)
-	}
-
-	return signed, nil
-}
-
-// ValidateToken verifies and parses a JWT
-func (s *Service) ValidateToken(tokenStr string) (*jwt.Token, error) {
-	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method")
-		}
+	token, err := parser.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
 		return s.jwtSecret, nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("ValidateToken: %w", err)
+		return nil, nil, appErr.Wrap("AuthService.ValidateToken(parse)", appErr.ErrInvalidToken, err)
 	}
-
 	if !token.Valid {
-		return nil, fmt.Errorf("ValidateToken: %w", appErr.ErrInvalidToken)
+		return nil, nil, appErr.Wrap("AuthService.ValidateToken", appErr.ErrInvalidToken, nil)
+	}
+	if s.issuer != "" && claims.Issuer != s.issuer {
+		return nil, nil, appErr.Wrap("AuthService.ValidateToken(issuer)", appErr.ErrInvalidToken, nil)
 	}
 
-	return token, nil
+	return token, claims, nil
+}
+
+// -----------------------------------------------------------------------------
+// JWT generator
+// -----------------------------------------------------------------------------
+
+func (s *service) generateJWT(rbacCtx *rbacModels.RBAC) (string, error) {
+	roleNames := make([]string, 0, len(rbacCtx.Roles))
+	for _, r := range rbacCtx.Roles {
+		roleNames = append(roleNames, r.Name)
+	}
+
+	permNames := make([]string, 0, len(rbacCtx.Permissions))
+	for _, p := range rbacCtx.Permissions {
+		permNames = append(permNames, p.Name)
+	}
+
+	now := time.Now()
+	claims := authModels.Claims{
+		UserID:      rbacCtx.User.ID,
+		Username:    rbacCtx.User.Username,
+		Roles:       roleNames,
+		Permissions: permNames,
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(s.accessTTL)),
+			Issuer:    s.issuer,
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString(s.jwtSecret)
+	if err != nil {
+		return "", appErr.Wrap("AuthService.generateJWT", appErr.ErrInternal, err)
+	}
+
+	return signed, nil
 }

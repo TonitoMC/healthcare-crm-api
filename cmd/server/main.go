@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/tonitomc/healthcare-crm-api/internal/api/routes"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/auth"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/rbac"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/role"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/user"
 )
 
@@ -37,16 +40,29 @@ func main() {
 
 	// ===== Dependency Injection Setup =====
 
+	// Role dependencies
+	roleRepo := role.NewRepository(db)
+	roleService := role.NewService(roleRepo)
+
 	// User dependencies
 	userRepo := user.NewRepository(db)
-	userService := user.NewService(userRepo)
+	userService := user.NewService(userRepo, roleService)
+
+	rbacService := rbac.NewService(userService, roleService)
+
+	// Auth Config (from pkg/config)
+	authCfg := auth.Config{
+		JWTSecret: cfg.JWTSecret,
+		AccessTTL: 24 * time.Hour, // or cfg.JWT_TTL if you added it in config.Load()
+		Issuer:    "healthcare-crm",
+	}
 
 	// Auth dependencies
-	authService := auth.NewService(userService, cfg.JWTSecret)
-	authHandler := auth.NewAuthHandler(authService)
+	authService := auth.NewService(userService, rbacService, authCfg)
+	authHandler := auth.NewHandler(authService)
 
 	// ===== Route Registration =====
-	routes.RegisterAuthRoutes(e, authHandler)
+	routes.RegisterRoutes(e, authHandler)
 
 	// ===== Server Start =====
 	e.Logger.Fatal(e.Start(":8080"))

@@ -7,11 +7,14 @@ import (
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
 
+// pqError defines the minimal interface implemented by PostgreSQL driver errors.
 type pqError interface {
 	SQLState() string
 }
 
-// PostgreSQL SQLSTATE code constants.
+// -----------------------------------------------------------------------------
+// PostgreSQL SQLSTATE code constants
+// -----------------------------------------------------------------------------
 const (
 	CodeUniqueViolation     = "23505"
 	CodeForeignKeyViolation = "23503"
@@ -21,50 +24,63 @@ const (
 	CodeSerializationFail   = "40001"
 )
 
-// errorMap defines how database-level SQLSTATE codes map
-// to high-level application errors defined in pkg/errors.
+// -----------------------------------------------------------------------------
+// Error mapping: SQLSTATE → application-level error
+// -----------------------------------------------------------------------------
 var errorMap = map[string]error{
 	CodeUniqueViolation:     appErr.ErrAlreadyExists,
-	CodeForeignKeyViolation: appErr.ErrInvalidInput,
-	CodeNotNullViolation:    appErr.ErrInvalidInput,
-	CodeCheckViolation:      appErr.ErrInvalidInput,
-	CodeInvalidTextRep:      appErr.ErrInvalidInput,
-	CodeSerializationFail:   appErr.ErrConflict,
+	CodeForeignKeyViolation: appErr.ErrInvalidInput,   // invalid FK reference
+	CodeNotNullViolation:    appErr.ErrIncompleteData, // missing required value
+	CodeCheckViolation:      appErr.ErrInvalidInput,   // constraint validation failed
+	CodeInvalidTextRep:      appErr.ErrInvalidRequest, // malformed literal or bad type
+	CodeSerializationFail:   appErr.ErrConflict,       // concurrent write conflict
 }
+
+// -----------------------------------------------------------------------------
+// MapSQLError
+// -----------------------------------------------------------------------------
 
 // MapSQLError standardizes raw SQL/driver errors into wrapped app-level errors.
 //
-// This should be used in all repositories when handling database operations.
+// Always use this in repositories when handling database queries or commands.
+// Example:
+//
+//	if err := r.db.Query(...); err != nil {
+//	    return database.MapSQLError(err, "UserRepository.Create")
+//	}
 func MapSQLError(err error, context string) error {
 	if err == nil {
 		return nil
 	}
 
-	// Handle "no rows found"
+	// "No rows found" case
 	if errors.Is(err, sql.ErrNoRows) {
 		return appErr.Wrap(context, appErr.ErrNotFound, err)
 	}
 
-	// Handle PostgreSQL-specific SQLSTATE errors
+	// PostgreSQL SQLSTATE error
 	var pqe pqError
 	if errors.As(err, &pqe) {
 		if mapped, ok := errorMap[pqe.SQLState()]; ok {
 			return appErr.Wrap(context, mapped, err)
 		}
-		// Unknown SQLSTATE → internal
+		// Unknown SQLSTATE → internal server error
 		return appErr.Wrap(context, appErr.ErrInternal, err)
 	}
 
-	// Any other error (driver, connection, etc.)
+	// Other (driver/connection) errors
 	return appErr.Wrap(context, appErr.ErrInternal, err)
 }
 
+// -----------------------------------------------------------------------------
+// MapTxError
+// -----------------------------------------------------------------------------
+
 // MapTxError wraps transaction-level errors (commit, rollback failures).
-// Typically used after tx.Commit() or tx.Rollback().
+// Should be used after tx.Commit() or tx.Rollback() calls.
 func MapTxError(err error, context string) error {
 	if err == nil {
 		return nil
 	}
-	// Transaction-level errors are almost always internal.
 	return appErr.Wrap(context, appErr.ErrInternal, err)
 }

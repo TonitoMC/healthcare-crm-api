@@ -4,56 +4,65 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	authModels "github.com/tonitomc/healthcare-crm-api/internal/domain/auth/models"
+	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
 
-// AuthHandler holds a reference to the AuthService
-type AuthHandler struct {
-	service *Service
+// Handler exposes HTTP endpoints for authentication.
+type Handler struct {
+	service Service
 }
 
-// NewAuthHandler creates a new handler instance
-func NewAuthHandler(service *Service) *AuthHandler {
-	return &AuthHandler{service: service}
+// NewHandler constructs a new AuthHandler.
+func NewHandler(s Service) *Handler {
+	return &Handler{service: s}
 }
 
-// RegisterRequest represents the expected JSON body for /register
-type RegisterRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+// RegisterRoutes mounts /auth routes under the provided Echo group.
+// The route group will have error-handling middleware attached externally (via routes.go).
+func (h *Handler) RegisterRoutes(g *echo.Group) {
+	authGroup := g.Group("/auth", ErrorMiddleware())
+	authGroup.POST("/register", h.Register)
+	authGroup.POST("/login", h.Login)
 }
 
-// LoginRequest represents the expected JSON body for /login
-type LoginRequest struct {
-	Identifier string `json:"identifier"` // username or email
-	Password   string `json:"password"`
-}
+// -----------------------------------------------------------------------------
+// POST /auth/register
+// -----------------------------------------------------------------------------
+func (h *Handler) Register(c echo.Context) error {
+	var req authModels.RegisterRequest
 
-// POST /register
-func (h *AuthHandler) Register(c echo.Context) error {
-	var req RegisterRequest
+	// Bind JSON input safely
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid request payload"})
+		return appErr.Wrap("Auth.Register.Bind", appErr.ErrInvalidRequest, err)
 	}
 
+	// Delegate to service
 	if err := h.service.Register(req.Username, req.Email, req.Password); err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return err // handled by global middleware
 	}
 
-	return c.JSON(http.StatusCreated, echo.Map{"message": "User registered successfully"})
+	return c.JSON(http.StatusCreated, echo.Map{
+		"message": "Usuario registrado correctamente",
+	})
 }
 
-// POST /login
-func (h *AuthHandler) Login(c echo.Context) error {
-	var req LoginRequest
+// -----------------------------------------------------------------------------
+// POST /auth/login
+// -----------------------------------------------------------------------------
+func (h *Handler) Login(c echo.Context) error {
+	var req authModels.LoginRequest
+
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid request payload"})
+		return appErr.Wrap("Auth.Login.Bind", appErr.ErrInvalidRequest, err)
 	}
 
 	token, err := h.service.Login(req.Identifier, req.Password)
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, echo.Map{"error": err.Error()})
+		return err // handled by middleware
 	}
 
-	return c.JSON(http.StatusOK, echo.Map{"token": token})
+	return c.JSON(http.StatusOK, echo.Map{
+		"token": token,
+	})
 }
