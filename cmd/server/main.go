@@ -14,6 +14,7 @@ import (
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/auth"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/rbac"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/role"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/schedule"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/user"
 )
 
@@ -61,8 +62,13 @@ func main() {
 	authService := auth.NewService(userService, rbacService, authCfg)
 	authHandler := auth.NewHandler(authService)
 
+	// Schedule dependencies
+	scheduleRepo := schedule.NewRepository(db)
+	scheduleService := schedule.NewService(scheduleRepo)
+	scheduleHandler := schedule.NewHandler(scheduleService)
+
 	// ===== Route Registration =====
-	routes.RegisterRoutes(e, authHandler)
+	routes.RegisterRoutes(e, authHandler, scheduleHandler)
 
 	// ===== Server Start =====
 	e.Logger.Fatal(e.Start(":8080"))
