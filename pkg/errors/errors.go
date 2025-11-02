@@ -8,6 +8,12 @@ import (
 // Core sentinel errors (global, domain-agnostic)
 // These errors are used across repositories and services, domain handlers
 // & middleware map them into user-facing messages.
+
+// Errors in this api usually have 3 "levels"
+// These sentinel ones, which are the least descriptive
+// Sentinels ones translated by Domain, eg. resource not found -> user not found
+// Custom domain errors (seen below) where the error type is kept & the message completely replaced
+// eg. "Appointment is outside business hours"
 var (
 	// Generic application errors
 	ErrInvalidRequest = errors.New("solicitud inválida")

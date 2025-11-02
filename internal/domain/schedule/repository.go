@@ -13,19 +13,16 @@ import (
 
 // Repository defines the data access contract for working hours and special days.
 type Repository interface {
+	// Reads
 	GetAllWorkingHours() ([]models.WorkDay, error)
 	GetAllSpecialHours() ([]models.SpecialDay, error)
-
 	GetSpecialHoursBetween(start, end time.Time) ([]models.SpecialDay, error)
 	GetSpecialHoursByDate(date time.Time) ([]models.SpecialDay, error)
 
-	CreateWorkingHour(day models.WorkDay) error
+	// Writes
 	UpdateWorkingHour(day models.WorkDay) error
-	DeleteWorkingHour(id int) error
-
-	CreateSpecialHour(day models.SpecialDay) error
 	UpdateSpecialHour(day models.SpecialDay) error
-	DeleteSpecialHour(id int) error
+	DeleteSpecialHour(date time.Time) error
 }
 
 // -----------------------------------------------------------------------------
@@ -92,58 +89,57 @@ func (r *repository) GetAllWorkingHours() ([]models.WorkDay, error) {
 	return result, nil
 }
 
-func (r *repository) CreateWorkingHour(day models.WorkDay) error {
-	if day.DayOfWeek < 1 || day.DayOfWeek > 7 {
-		return appErr.Wrap("ScheduleRepo.CreateWorkingHour", appErr.ErrInvalidInput, nil)
-	}
-
-	var start, end *time.Time
-	if day.Active && len(day.Ranges) > 0 {
-		start = &day.Ranges[0].Start
-		end = &day.Ranges[0].End
-	}
-
-	_, err := r.db.Exec(`
-		INSERT INTO horarios_laborales (dia_semana, hora_apertura, hora_cierre, abierto)
-		VALUES ($1, $2, $3, $4);
-	`, day.DayOfWeek, start, end, day.Active)
-	if err != nil {
-		return dbErr.MapSQLError(err, "ScheduleRepo.CreateWorkingHour")
-	}
-	return nil
-}
-
 func (r *repository) UpdateWorkingHour(day models.WorkDay) error {
-	if day.ID <= 0 {
+	if day.DayOfWeek < 1 || day.DayOfWeek > 7 {
 		return appErr.Wrap("ScheduleRepo.UpdateWorkingHour", appErr.ErrInvalidInput, nil)
 	}
 
-	var start, end *time.Time
+	tx, err := r.db.Begin()
+	if err != nil {
+		return dbErr.MapSQLError(err, "ScheduleRepo.UpdateWorkingHour(begin)")
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Delete all existing entries for this weekday
+	if _, err := tx.Exec(`DELETE FROM horarios_laborales WHERE dia_semana = $1;`, day.DayOfWeek); err != nil {
+		return dbErr.MapSQLError(err, "ScheduleRepo.UpdateWorkingHour(delete)")
+	}
+
+	// If active and has ranges → insert each one
 	if day.Active && len(day.Ranges) > 0 {
-		start = &day.Ranges[0].Start
-		end = &day.Ranges[0].End
+		stmt, err := tx.Prepare(`
+			INSERT INTO horarios_laborales (dia_semana, hora_apertura, hora_cierre, abierto)
+			VALUES ($1, $2, $3, TRUE);
+		`)
+		if err != nil {
+			return dbErr.MapSQLError(err, "ScheduleRepo.UpdateWorkingHour(prepare)")
+		}
+		defer stmt.Close()
+
+		for _, tr := range day.Ranges {
+			if !tr.IsValid() {
+				return appErr.NewDomainError(appErr.ErrInvalidInput, "Rango horario inválido en UpdateWorkingHour")
+			}
+			if _, err := stmt.Exec(day.DayOfWeek, tr.Start, tr.End); err != nil {
+				return dbErr.MapSQLError(err, "ScheduleRepo.UpdateWorkingHour(insert range)")
+			}
+		}
+
+	} else {
+		// If closed or no ranges → single inactive record
+		if _, err := tx.Exec(`
+			INSERT INTO horarios_laborales (dia_semana, hora_apertura, hora_cierre, abierto)
+			VALUES ($1, NULL, NULL, FALSE);
+		`, day.DayOfWeek); err != nil {
+			return dbErr.MapSQLError(err, "ScheduleRepo.UpdateWorkingHour(insert closed)")
+		}
 	}
 
-	_, err := r.db.Exec(`
-		UPDATE horarios_laborales
-		SET dia_semana=$1, hora_apertura=$2, hora_cierre=$3, abierto=$4
-		WHERE id=$5;
-	`, day.DayOfWeek, start, end, day.Active, day.ID)
-	if err != nil {
-		return dbErr.MapSQLError(err, "ScheduleRepo.UpdateWorkingHour")
-	}
-	return nil
-}
-
-func (r *repository) DeleteWorkingHour(id int) error {
-	if id <= 0 {
-		return appErr.Wrap("ScheduleRepo.DeleteWorkingHour", appErr.ErrInvalidInput, nil)
+	// Commit
+	if err := tx.Commit(); err != nil {
+		return dbErr.MapSQLError(err, "ScheduleRepo.UpdateWorkingHour(commit)")
 	}
 
-	_, err := r.db.Exec(`DELETE FROM horarios_laborales WHERE id=$1;`, id)
-	if err != nil {
-		return dbErr.MapSQLError(err, "ScheduleRepo.DeleteWorkingHour")
-	}
 	return nil
 }
 
@@ -299,50 +295,6 @@ func (r *repository) GetSpecialHoursByDate(date time.Time) ([]models.SpecialDay,
 	return result, nil
 }
 
-func (r *repository) CreateSpecialHour(day models.SpecialDay) error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return dbErr.MapSQLError(err, "ScheduleRepo.CreateSpecialHour(begin)")
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	if day.Active && len(day.Ranges) > 0 {
-		stmt, err := tx.Prepare(`
-			INSERT INTO horarios_especiales (fecha, hora_apertura, hora_cierre, abierto)
-			VALUES ($1, $2, $3, $4);
-		`)
-		if err != nil {
-			return dbErr.MapSQLError(err, "ScheduleRepo.CreateSpecialHour(prepare)")
-		}
-		defer stmt.Close()
-
-		for _, tr := range day.Ranges {
-			if !tr.IsValid() {
-				return appErr.NewDomainError(appErr.ErrInvalidInput, "Rango horario inválido en CreateSpecialHour")
-			}
-			if _, err := stmt.Exec(day.Date, tr.Start, tr.End, true); err != nil {
-				return dbErr.MapSQLError(err, "ScheduleRepo.CreateSpecialHour(insert)")
-			}
-		}
-	} else {
-		// If no ranges, insert a closed day
-		if _, err := tx.Exec(`
-			INSERT INTO horarios_especiales (fecha, hora_apertura, hora_cierre, abierto)
-			VALUES ($1, NULL, NULL, FALSE);
-		`, day.Date); err != nil {
-			return dbErr.MapSQLError(err, "ScheduleRepo.CreateSpecialHour(insert closed)")
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return dbErr.MapSQLError(err, "ScheduleRepo.CreateSpecialHour(commit)")
-	}
-
-	return nil
-}
-
 func (r *repository) UpdateSpecialHour(day models.SpecialDay) error {
 	if day.Date.IsZero() {
 		return appErr.Wrap("ScheduleRepo.UpdateSpecialHour", appErr.ErrInvalidInput, nil)
@@ -397,15 +349,16 @@ func (r *repository) UpdateSpecialHour(day models.SpecialDay) error {
 	return nil
 }
 
-func (r *repository) DeleteSpecialHour(id int) error {
-	if id <= 0 {
-		return appErr.Wrap("ScheduleRepo.DeleteSpecialHour", appErr.ErrInvalidInput, nil)
+func (r *repository) DeleteSpecialHour(date time.Time) error {
+	if date.IsZero() {
+		return appErr.Wrap("ScheduleRepo.DeleteSpecialHourByDate", appErr.ErrInvalidInput, nil)
 	}
 
-	_, err := r.db.Exec(`DELETE FROM horarios_especiales WHERE id=$1;`, id)
+	_, err := r.db.Exec(`DELETE FROM horarios_especiales WHERE fecha = $1;`, date)
 	if err != nil {
-		return dbErr.MapSQLError(err, "ScheduleRepo.DeleteSpecialHour")
+		return dbErr.MapSQLError(err, "ScheduleRepo.DeleteSpecialHourByDate")
 	}
+
 	return nil
 }
 

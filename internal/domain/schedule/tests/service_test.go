@@ -1,229 +1,250 @@
 package schedule_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/schedule"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/schedule/mocks"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/schedule/models"
-	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
 
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
-func mustParseTime(hour string) time.Time {
-	t, _ := time.Parse("15:04", hour)
-	return t
+func makeTime(h, m int) time.Time {
+	return time.Date(2025, 11, 2, h, m, 0, 0, time.UTC)
 }
 
-// -----------------------------------------------------------------------------
-// Tests
-// -----------------------------------------------------------------------------
-
-func TestGetWorkingHours_GroupsAndSortsMultipleRanges(t *testing.T) {
+func TestGetWorkingHours_GroupsAndSortsCorrectly(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	repo := mocks.NewMockRepository(ctrl)
+	service := schedule.NewService(repo)
 
-	mockRepo := mocks.NewMockRepository(ctrl)
-	svc := schedule.NewService(mockRepo)
-
-	mockRepo.
-		EXPECT().
+	repo.EXPECT().
 		GetAllWorkingHours().
 		Return([]models.WorkDay{
-			{DayOfWeek: 1, Active: true, Ranges: []models.TimeRange{{Start: mustParseTime("15:00"), End: mustParseTime("18:00")}}},
-			{DayOfWeek: 1, Active: true, Ranges: []models.TimeRange{{Start: mustParseTime("09:00"), End: mustParseTime("13:00")}}},
-			{DayOfWeek: 2, Active: true, Ranges: []models.TimeRange{{Start: mustParseTime("08:00"), End: mustParseTime("12:00")}}},
+			{DayOfWeek: 1, Active: true, Ranges: []models.TimeRange{{Start: makeTime(10, 0), End: makeTime(11, 0)}}},
+			{DayOfWeek: 1, Active: true, Ranges: []models.TimeRange{{Start: makeTime(8, 0), End: makeTime(9, 0)}}},
+			{DayOfWeek: 2, Active: false},
 		}, nil)
 
-	hours, err := svc.GetWorkingHours()
-	assert.NoError(t, err)
-	assert.Len(t, hours, 2)
-	assert.Equal(t, 1, hours[0].DayOfWeek)
-	assert.Len(t, hours[0].Ranges, 2)
-	assert.True(t, hours[0].Ranges[0].Start.Before(hours[0].Ranges[1].Start))
+	result, err := service.GetWorkingHours()
+	require.NoError(t, err)
+	require.Len(t, result, 2)
+
+	assert.Equal(t, 1, result[0].DayOfWeek)
+	assert.True(t, result[0].Active)
+	assert.Equal(t, makeTime(8, 0), result[0].Ranges[0].Start)
+	assert.Equal(t, makeTime(10, 0), result[0].Ranges[1].Start)
 }
 
-func TestGetSpecialHoursBetween_GroupsMultipleRangesPerDate(t *testing.T) {
+func TestGetWorkingHours_RepoErrorBubblesUp(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	repo := mocks.NewMockRepository(ctrl)
+	service := schedule.NewService(repo)
 
-	mockRepo := mocks.NewMockRepository(ctrl)
-	svc := schedule.NewService(mockRepo)
+	repo.EXPECT().
+		GetAllWorkingHours().
+		Return(nil, errors.New("db failure"))
 
-	date := time.Date(2025, 11, 4, 0, 0, 0, 0, time.UTC)
-
-	mockRepo.
-		EXPECT().
-		GetSpecialHoursBetween(gomock.Any(), gomock.Any()).
-		Return([]models.SpecialDay{
-			{Date: date, Active: true, Ranges: []models.TimeRange{{Start: mustParseTime("09:00"), End: mustParseTime("12:00")}}},
-			{Date: date, Active: true, Ranges: []models.TimeRange{{Start: mustParseTime("14:00"), End: mustParseTime("18:00")}}},
-		}, nil)
-
-	specials, err := svc.GetSpecialHoursBetween(date, date)
-	assert.NoError(t, err)
-	assert.Len(t, specials, 1)
-	assert.Len(t, specials[0].Ranges, 2)
-	assert.True(t, specials[0].Ranges[0].Start.Before(specials[0].Ranges[1].Start))
+	result, err := service.GetWorkingHours()
+	assert.Nil(t, result)
+	assert.EqualError(t, err, "db failure")
 }
 
-func TestGetEffectiveDay_UsesMultipleSpecialRanges(t *testing.T) {
+func TestAddSpecialDay_InvalidRange(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	repo := mocks.NewMockRepository(ctrl)
+	service := schedule.NewService(repo)
 
-	mockRepo := mocks.NewMockRepository(ctrl)
-	svc := schedule.NewService(mockRepo)
+	invalid := models.SpecialDay{
+		Date:   time.Now(),
+		Active: true,
+		Ranges: []models.TimeRange{{Start: makeTime(10, 0), End: makeTime(9, 0)}}, // invalid
+	}
 
-	date := time.Date(2025, 11, 10, 0, 0, 0, 0, time.UTC)
+	err := service.AddSpecialDay(invalid)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Rango horario inválido")
+}
 
-	mockRepo.
-		EXPECT().
+func TestAddSpecialDay_ValidDelegatesToRepo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mocks.NewMockRepository(ctrl)
+	service := schedule.NewService(repo)
+
+	valid := models.SpecialDay{
+		Date:   time.Now(),
+		Active: true,
+		Ranges: []models.TimeRange{{Start: makeTime(9, 0), End: makeTime(10, 0)}},
+	}
+
+	repo.EXPECT().UpdateSpecialHour(valid).Return(nil)
+	err := service.AddSpecialDay(valid)
+	assert.NoError(t, err)
+}
+
+func TestGetEffectiveDay_UsesSpecialOverride(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mocks.NewMockRepository(ctrl)
+	service := schedule.NewService(repo)
+
+	date := time.Date(2025, 12, 25, 0, 0, 0, 0, time.UTC)
+
+	repo.EXPECT().
 		GetSpecialHoursByDate(date).
 		Return([]models.SpecialDay{
-			{Date: date, Active: true, Ranges: []models.TimeRange{{Start: mustParseTime("09:00"), End: mustParseTime("12:00")}}},
-			{Date: date, Active: true, Ranges: []models.TimeRange{{Start: mustParseTime("14:00"), End: mustParseTime("18:00")}}},
+			{Date: date, Active: true, Ranges: []models.TimeRange{{Start: makeTime(8, 0), End: makeTime(9, 0)}}},
+			{Date: date, Active: true, Ranges: []models.TimeRange{{Start: makeTime(10, 0), End: makeTime(11, 0)}}},
 		}, nil)
 
-	eff, err := svc.GetEffectiveDay(date)
-	assert.NoError(t, err)
-	assert.True(t, eff.IsOverride)
-	assert.True(t, eff.Active)
-	assert.Len(t, eff.Ranges, 2)
+	result, err := service.GetEffectiveDay(date)
+	require.NoError(t, err)
+	assert.True(t, result.IsOverride)
+	assert.True(t, result.Active)
+	assert.Len(t, result.Ranges, 2)
+	assert.True(t, result.Ranges[0].Start.Before(result.Ranges[1].Start))
 }
 
-func TestGetEffectiveDay_MergesMultipleWorkingRanges(t *testing.T) {
+func TestGetEffectiveDay_FallbackToWorkingHours(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	repo := mocks.NewMockRepository(ctrl)
+	service := schedule.NewService(repo)
 
-	mockRepo := mocks.NewMockRepository(ctrl)
-	svc := schedule.NewService(mockRepo)
+	date := time.Date(2025, 11, 3, 0, 0, 0, 0, time.UTC) // Monday (weekday=1)
 
-	date := time.Date(2025, 10, 30, 0, 0, 0, 0, time.UTC) // Thursday = 4
+	repo.EXPECT().GetSpecialHoursByDate(date).Return(nil, nil)
+	repo.EXPECT().
+		GetAllWorkingHours().
+		Return([]models.WorkDay{
+			{DayOfWeek: 1, Active: true, Ranges: []models.TimeRange{{Start: makeTime(9, 0), End: makeTime(17, 0)}}},
+			{DayOfWeek: 2, Active: false},
+		}, nil)
 
-	mockRepo.
-		EXPECT().
+	result, err := service.GetEffectiveDay(date)
+	require.NoError(t, err)
+	assert.False(t, result.IsOverride)
+	assert.True(t, result.Active)
+	assert.Equal(t, 1, int(result.Date.Weekday()))
+	assert.Len(t, result.Ranges, 1)
+}
+
+func TestIsTimeRangeWithinWorkingHours(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mocks.NewMockRepository(ctrl)
+	service := schedule.NewService(repo)
+
+	date := time.Date(2025, 11, 3, 0, 0, 0, 0, time.UTC)
+
+	repo.EXPECT().
 		GetSpecialHoursByDate(date).
 		Return(nil, nil)
-
-	mockRepo.
-		EXPECT().
+	repo.EXPECT().
 		GetAllWorkingHours().
 		Return([]models.WorkDay{
-			{DayOfWeek: 4, Active: true, Ranges: []models.TimeRange{
-				{Start: mustParseTime("09:00"), End: mustParseTime("12:00")},
-				{Start: mustParseTime("14:00"), End: mustParseTime("17:00")},
+			{DayOfWeek: 1, Active: true, Ranges: []models.TimeRange{
+				{Start: makeTime(9, 0), End: makeTime(17, 0)},
 			}},
 		}, nil)
 
-	eff, err := svc.GetEffectiveDay(date)
+	start := makeTime(10, 0)
+	end := makeTime(11, 0)
+	ok, err := service.IsTimeRangeWithinWorkingHours(date, start, end)
+	assert.True(t, ok)
 	assert.NoError(t, err)
-	assert.False(t, eff.IsOverride)
-	assert.True(t, eff.Active)
-	assert.Len(t, eff.Ranges, 2)
 }
 
-func TestIsDateOpen_ClosedDay(t *testing.T) {
+func TestIsTimeRangeWithinWorkingHours_OutOfRange(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	mockRepo := mocks.NewMockRepository(ctrl)
-	svc := schedule.NewService(mockRepo)
-
-	date := time.Date(2025, 11, 1, 0, 0, 0, 0, time.UTC)
-
-	mockRepo.
-		EXPECT().
-		GetSpecialHoursByDate(date).
-		Return([]models.SpecialDay{
-			{Date: date, Active: false},
-		}, nil)
-
-	open, err := svc.IsDateOpen(date)
-	assert.NoError(t, err)
-	assert.False(t, open)
-}
-
-func TestIsTimeRangeWithinWorkingHours_SuccessAcrossMultipleRanges(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockRepo := mocks.NewMockRepository(ctrl)
-	svc := schedule.NewService(mockRepo)
+	repo := mocks.NewMockRepository(ctrl)
+	service := schedule.NewService(repo)
 
 	date := time.Date(2025, 11, 3, 0, 0, 0, 0, time.UTC)
-	workday := models.WorkDay{
-		DayOfWeek: 1,
-		Active:    true,
-		Ranges: []models.TimeRange{
-			{Start: mustParseTime("09:00"), End: mustParseTime("13:00")},
-			{Start: mustParseTime("15:00"), End: mustParseTime("18:00")},
-		},
-	}
 
-	mockRepo.
-		EXPECT().
-		GetSpecialHoursByDate(date).
-		Return(nil, nil)
-	mockRepo.
-		EXPECT().
+	repo.EXPECT().GetSpecialHoursByDate(date).Return(nil, nil)
+	repo.EXPECT().
 		GetAllWorkingHours().
-		Return([]models.WorkDay{workday}, nil)
+		Return([]models.WorkDay{
+			{DayOfWeek: 1, Active: true, Ranges: []models.TimeRange{
+				{Start: makeTime(9, 0), End: makeTime(17, 0)},
+			}},
+		}, nil)
 
-	// Should pass (falls within second range)
-	start := mustParseTime("15:30")
-	end := mustParseTime("16:30")
-
-	ok, err := svc.IsTimeRangeWithinWorkingHours(date, start, end)
-	assert.NoError(t, err)
-	assert.True(t, ok)
+	start := makeTime(18, 0)
+	end := makeTime(19, 0)
+	ok, err := service.IsTimeRangeWithinWorkingHours(date, start, end)
+	assert.False(t, ok)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "fuera del rango permitido")
 }
 
 func TestUpdateWorkDay_InvalidRange(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	repo := mocks.NewMockRepository(ctrl)
+	service := schedule.NewService(repo)
 
-	mockRepo := mocks.NewMockRepository(ctrl)
-	svc := schedule.NewService(mockRepo)
-
-	invalid := models.WorkDay{
+	bad := models.WorkDay{
 		DayOfWeek: 1,
-		Ranges: []models.TimeRange{
-			{Start: mustParseTime("10:00"), End: mustParseTime("09:00")},
-		},
+		Active:    true,
+		Ranges:    []models.TimeRange{{Start: makeTime(12, 0), End: makeTime(11, 0)}},
 	}
-
-	err := svc.UpdateWorkDay(invalid)
+	err := service.UpdateWorkDay(bad)
 	assert.Error(t, err)
-	assert.True(t, appErr.IsDomainError(err))
+	assert.Contains(t, err.Error(), "Rango horario inválido")
 }
 
-func TestAddSpecialDay_ValidatesAndCreates(t *testing.T) {
+func TestUpdateWorkDay_ValidCallsRepo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+	repo := mocks.NewMockRepository(ctrl)
+	service := schedule.NewService(repo)
 
-	mockRepo := mocks.NewMockRepository(ctrl)
-	svc := schedule.NewService(mockRepo)
-
-	valid := models.SpecialDay{
-		Date: time.Now(),
-		Ranges: []models.TimeRange{
-			{Start: mustParseTime("09:00"), End: mustParseTime("10:00")},
-			{Start: mustParseTime("11:00"), End: mustParseTime("12:00")},
-		},
-		Active: true,
+	good := models.WorkDay{
+		DayOfWeek: 1,
+		Active:    true,
+		Ranges:    []models.TimeRange{{Start: makeTime(9, 0), End: makeTime(17, 0)}},
 	}
+	repo.EXPECT().UpdateWorkingHour(good).Return(nil)
 
-	mockRepo.
-		EXPECT().
-		CreateSpecialHour(valid).
-		Return(nil)
-
-	err := svc.AddSpecialDay(valid)
+	err := service.UpdateWorkDay(good)
 	assert.NoError(t, err)
+}
+
+func TestDeleteSpecialDayByDate_CallsRepo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mocks.NewMockRepository(ctrl)
+	service := schedule.NewService(repo)
+
+	date := time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC)
+	repo.EXPECT().DeleteSpecialHour(date).Return(nil)
+
+	err := service.DeleteSpecialDay(date)
+	assert.NoError(t, err)
+}
+
+func TestDeleteSpecialDayByDate_RepoErrorBubblesUp(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mocks.NewMockRepository(ctrl)
+	service := schedule.NewService(repo)
+
+	date := time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC)
+	repo.EXPECT().DeleteSpecialHour(date).Return(errors.New("delete failed"))
+
+	err := service.DeleteSpecialDay(date)
+	assert.Error(t, err)
+	assert.EqualError(t, err, "delete failed")
 }

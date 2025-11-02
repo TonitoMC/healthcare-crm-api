@@ -35,60 +35,18 @@ func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 	return m.recorder
 }
 
-// CreateSpecialHour mocks base method.
-func (m *MockRepository) CreateSpecialHour(day models.SpecialDay) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateSpecialHour", day)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CreateSpecialHour indicates an expected call of CreateSpecialHour.
-func (mr *MockRepositoryMockRecorder) CreateSpecialHour(day interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSpecialHour", reflect.TypeOf((*MockRepository)(nil).CreateSpecialHour), day)
-}
-
-// CreateWorkingHour mocks base method.
-func (m *MockRepository) CreateWorkingHour(day models.WorkDay) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateWorkingHour", day)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CreateWorkingHour indicates an expected call of CreateWorkingHour.
-func (mr *MockRepositoryMockRecorder) CreateWorkingHour(day interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateWorkingHour", reflect.TypeOf((*MockRepository)(nil).CreateWorkingHour), day)
-}
-
 // DeleteSpecialHour mocks base method.
-func (m *MockRepository) DeleteSpecialHour(id int) error {
+func (m *MockRepository) DeleteSpecialHour(date time.Time) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteSpecialHour", id)
+	ret := m.ctrl.Call(m, "DeleteSpecialHour", date)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteSpecialHour indicates an expected call of DeleteSpecialHour.
-func (mr *MockRepositoryMockRecorder) DeleteSpecialHour(id interface{}) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) DeleteSpecialHour(date interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSpecialHour", reflect.TypeOf((*MockRepository)(nil).DeleteSpecialHour), id)
-}
-
-// DeleteWorkingHour mocks base method.
-func (m *MockRepository) DeleteWorkingHour(id int) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteWorkingHour", id)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteWorkingHour indicates an expected call of DeleteWorkingHour.
-func (mr *MockRepositoryMockRecorder) DeleteWorkingHour(id interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteWorkingHour", reflect.TypeOf((*MockRepository)(nil).DeleteWorkingHour), id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSpecialHour", reflect.TypeOf((*MockRepository)(nil).DeleteSpecialHour), date)
 }
 
 // GetAllSpecialHours mocks base method.

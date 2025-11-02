@@ -12,21 +12,19 @@ import (
 
 // Service Interface
 type Service interface {
-	// --- Read operations ---
+	// Reads
 	GetWorkingHours() ([]models.WorkDay, error)
 	GetSpecialHoursBetween(start, end time.Time) ([]models.SpecialDay, error)
 	GetEffectiveDay(date time.Time) (*models.EffectiveDay, error)
 	GetEffectiveRange(start, end time.Time) ([]models.EffectiveDay, error)
 
-	// --- Validation operations ---
-	IsDateOpen(date time.Time) (bool, error)
-	IsTimeRangeWithinWorkingHours(date, start, end time.Time) (bool, error)
-
-	// --- Write operations ---
+	// Writes
 	UpdateWorkDay(day models.WorkDay) error
 	AddSpecialDay(day models.SpecialDay) error
-	UpdateSpecialDay(day models.SpecialDay) error
-	DeleteSpecialDay(id int) error
+	DeleteSpecialDay(date time.Time) error
+
+	// Validations (Internal)
+	IsTimeRangeWithinWorkingHours(date, start, end time.Time) (bool, error)
 }
 
 // Implementation
@@ -203,15 +201,6 @@ func (s *service) GetEffectiveRange(start, end time.Time) ([]models.EffectiveDay
 // VALIDATION OPERATIONS
 // ============================================================================
 
-// IsDateOpen returns true if the given date has any active hours.
-func (s *service) IsDateOpen(date time.Time) (bool, error) {
-	eff, err := s.GetEffectiveDay(date)
-	if err != nil {
-		return false, err
-	}
-	return eff.Active && len(eff.Ranges) > 0, nil
-}
-
 // IsTimeRangeWithinWorkingHours ensures an appointment fits within open slots.
 func (s *service) IsTimeRangeWithinWorkingHours(date, start, end time.Time) (bool, error) {
 	eff, err := s.GetEffectiveDay(date)
@@ -251,7 +240,7 @@ func (s *service) AddSpecialDay(day models.SpecialDay) error {
 			return appErr.NewDomainError(appErr.ErrInvalidInput, "Rango horario inválido: hora de apertura mayor o igual a hora de cierre.")
 		}
 	}
-	return s.repo.CreateSpecialHour(day)
+	return s.repo.UpdateSpecialHour(day)
 }
 
 func (s *service) UpdateSpecialDay(day models.SpecialDay) error {
@@ -263,6 +252,6 @@ func (s *service) UpdateSpecialDay(day models.SpecialDay) error {
 	return s.repo.UpdateSpecialHour(day)
 }
 
-func (s *service) DeleteSpecialDay(id int) error {
-	return s.repo.DeleteSpecialHour(id)
+func (s *service) DeleteSpecialDay(date time.Time) error {
+	return s.repo.DeleteSpecialHour(date)
 }

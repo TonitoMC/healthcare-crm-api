@@ -2,7 +2,7 @@ package models
 
 // CreateWorkDayRequest represents POST body for creating new working hours.
 type CreateWorkDayRequest struct {
-	DayOfWeek int           `json:"day_of_week" validate:"required,min=0,max=6"`
+	DayOfWeek int           `json:"day_of_week" validate:"required,min=1,max=7"`
 	Ranges    []TimeRangeIn `json:"ranges" validate:"required,dive"`
 }
 

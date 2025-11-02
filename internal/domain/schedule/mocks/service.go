@@ -50,17 +50,17 @@ func (mr *MockServiceMockRecorder) AddSpecialDay(day interface{}) *gomock.Call {
 }
 
 // DeleteSpecialDay mocks base method.
-func (m *MockService) DeleteSpecialDay(id int) error {
+func (m *MockService) DeleteSpecialDay(date time.Time) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteSpecialDay", id)
+	ret := m.ctrl.Call(m, "DeleteSpecialDay", date)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteSpecialDay indicates an expected call of DeleteSpecialDay.
-func (mr *MockServiceMockRecorder) DeleteSpecialDay(id interface{}) *gomock.Call {
+func (mr *MockServiceMockRecorder) DeleteSpecialDay(date interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSpecialDay", reflect.TypeOf((*MockService)(nil).DeleteSpecialDay), id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSpecialDay", reflect.TypeOf((*MockService)(nil).DeleteSpecialDay), date)
 }
 
 // GetEffectiveDay mocks base method.
@@ -123,21 +123,6 @@ func (mr *MockServiceMockRecorder) GetWorkingHours() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkingHours", reflect.TypeOf((*MockService)(nil).GetWorkingHours))
 }
 
-// IsDateOpen mocks base method.
-func (m *MockService) IsDateOpen(date time.Time) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsDateOpen", date)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// IsDateOpen indicates an expected call of IsDateOpen.
-func (mr *MockServiceMockRecorder) IsDateOpen(date interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDateOpen", reflect.TypeOf((*MockService)(nil).IsDateOpen), date)
-}
-
 // IsTimeRangeWithinWorkingHours mocks base method.
 func (m *MockService) IsTimeRangeWithinWorkingHours(date, start, end time.Time) (bool, error) {
 	m.ctrl.T.Helper()
@@ -151,20 +136,6 @@ func (m *MockService) IsTimeRangeWithinWorkingHours(date, start, end time.Time) 
 func (mr *MockServiceMockRecorder) IsTimeRangeWithinWorkingHours(date, start, end interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsTimeRangeWithinWorkingHours", reflect.TypeOf((*MockService)(nil).IsTimeRangeWithinWorkingHours), date, start, end)
-}
-
-// UpdateSpecialDay mocks base method.
-func (m *MockService) UpdateSpecialDay(day models.SpecialDay) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateSpecialDay", day)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UpdateSpecialDay indicates an expected call of UpdateSpecialDay.
-func (mr *MockServiceMockRecorder) UpdateSpecialDay(day interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSpecialDay", reflect.TypeOf((*MockService)(nil).UpdateSpecialDay), day)
 }
 
 // UpdateWorkDay mocks base method.
