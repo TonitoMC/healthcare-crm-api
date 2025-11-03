@@ -2,7 +2,6 @@ package main
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -10,6 +9,7 @@ import (
 	"github.com/tonitomc/healthcare-crm-api/internal/database"
 	"github.com/tonitomc/healthcare-crm-api/pkg/config"
 
+	middlewarePkg "github.com/tonitomc/healthcare-crm-api/internal/api/middleware"
 	"github.com/tonitomc/healthcare-crm-api/internal/api/routes"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/auth"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/rbac"
@@ -34,6 +34,8 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
+	e.Use(middlewarePkg.JWTMiddleware(cfg.JWTSecret))
+
 	// Root test route
 	e.GET("/", func(c echo.Context) error {
 		return c.String(http.StatusOK, "Hello from Healthcare CRM backend!")
@@ -51,16 +53,18 @@ func main() {
 
 	rbacService := rbac.NewService(userService, roleService)
 
-	// Auth Config (from pkg/config)
+	// Auth Config
 	authCfg := auth.Config{
 		JWTSecret: cfg.JWTSecret,
-		AccessTTL: 24 * time.Hour, // or cfg.JWT_TTL if you added it in config.Load()
-		Issuer:    "healthcare-crm",
+		AccessTTL: cfg.JWTTTL,
+		Issuer:    cfg.JWTIssuer,
 	}
 
 	// Auth dependencies
 	authService := auth.NewService(userService, rbacService, authCfg)
 	authHandler := auth.NewHandler(authService)
+
+	ensureSuperuser(cfg, userService, authService, e.Logger)
 
 	// Schedule dependencies
 	scheduleRepo := schedule.NewRepository(db)
@@ -72,4 +76,34 @@ func main() {
 
 	// ===== Server Start =====
 	e.Logger.Fatal(e.Start(":8080"))
+}
+
+// Superuser bootstrap, I have NO clue where to drop this so it's here for now
+func ensureSuperuser(cfg *config.Config, userService user.Service, authService auth.Service, logger echo.Logger) {
+	if cfg.SuperuserEmail == "" || cfg.SuperuserPassword == "" {
+		logger.Info("Skipping superuser creation — SUPERUSER_* variables not set.")
+		return
+	}
+
+	user, err := userService.GetByUsernameOrEmail(cfg.SuperuserEmail)
+	if err == nil && user != nil {
+		logger.Infof("Superuser '%s' already exists.", cfg.SuperuserEmail)
+		return
+	}
+
+	if err := authService.Register(cfg.SuperuserName, cfg.SuperuserEmail, cfg.SuperuserPassword); err != nil {
+		logger.Errorf("Failed to register superuser: %v", err)
+		return
+	}
+
+	user, err = userService.GetByUsernameOrEmail(cfg.SuperuserName)
+	if err != nil {
+		logger.Errorf("Superuser wasn't registered correctly: %v", err)
+	}
+
+	if err := userService.AddRole(user.ID, 3); err != nil {
+		logger.Errorf("Failed to add Admin role to superuser: %v", err)
+	}
+
+	logger.Infof("Superuser '%s' created successfully.", cfg.SuperuserEmail)
 }

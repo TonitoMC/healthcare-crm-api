@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/tonitomc/healthcare-crm-api/internal/api/middleware"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/schedule/models"
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
@@ -24,15 +25,15 @@ func (h *Handler) RegisterRoutes(g *echo.Group) {
 	scheduleGroup := g.Group("/schedule", ErrorMiddleware())
 
 	// Read operations
-	scheduleGroup.GET("/working-hours", h.GetWorkingHours)
-	scheduleGroup.GET("/special-hours", h.GetSpecialHoursBetween)
-	scheduleGroup.GET("/effective/day/:date", h.GetEffectiveDay)
-	scheduleGroup.GET("/effective/range", h.GetEffectiveRange)
+	scheduleGroup.GET("/working-hours", h.GetWorkingHours, middleware.RequirePermission("ver-horarios"))
+	scheduleGroup.GET("/special-hours", h.GetSpecialHoursBetween, middleware.RequirePermission("ver-horarios"))
+	scheduleGroup.GET("/effective/day/:date", h.GetEffectiveDay, middleware.RequirePermission("ver-horarios"))
+	scheduleGroup.GET("/effective/range", h.GetEffectiveRange, middleware.RequirePermission("ver-horarios"))
 
 	// Write operations
-	scheduleGroup.POST("/working-hours", h.UpdateWorkDay)
-	scheduleGroup.POST("/special-hours", h.AddSpecialDay)
-	scheduleGroup.DELETE("/special-hours/:date", h.DeleteSpecialDay)
+	scheduleGroup.POST("/working-hours", h.UpdateWorkDay, middleware.RequirePermission("editar-horarios"))
+	scheduleGroup.POST("/special-hours", h.AddSpecialDay, middleware.RequirePermission("editar-horarios"))
+	scheduleGroup.DELETE("/special-hours/:date", h.DeleteSpecialDay, middleware.RequirePermission("editar-horarios"))
 }
 
 // GET /schedule/working-hours
