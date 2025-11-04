@@ -21,6 +21,10 @@ type Config struct {
 	SuperuserName     string
 	SuperuserEmail    string
 	SuperuserPassword string
+
+	SecretaryName     string
+	SecretaryEmail    string
+	SecretaryPassword string
 }
 
 // Load reads environment variables into a Config struct.
@@ -66,6 +70,16 @@ func Load() *Config {
 	// Not required — if empty, bootstrap will just skip
 	if cfg.SuperuserName == "" || cfg.SuperuserEmail == "" || cfg.SuperuserPassword == "" {
 		log.Println("⚠️ SUPERUSER_* variables not set — skipping auto-creation")
+	}
+
+	// Secretary
+	cfg.SecretaryName = os.Getenv("SECRETARY_NAME")
+	cfg.SecretaryEmail = os.Getenv("SECRETARY_EMAIL")
+	cfg.SecretaryPassword = os.Getenv("SECRETARY_PASSWORD")
+
+	// Not required — if empty, bootstrap will just skip
+	if cfg.SecretaryName == "" || cfg.SecretaryEmail == "" || cfg.SecretaryPassword == "" {
+		log.Println("⚠️ SECRETARY_* variables not set — skipping auto-creation")
 	}
 
 	return cfg

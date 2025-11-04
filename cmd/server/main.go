@@ -65,6 +65,7 @@ func main() {
 	authHandler := auth.NewHandler(authService)
 
 	ensureSuperuser(cfg, userService, authService, e.Logger)
+	ensureSecretary(cfg, userService, authService, e.Logger)
 
 	// Schedule dependencies
 	scheduleRepo := schedule.NewRepository(db)
@@ -106,4 +107,35 @@ func ensureSuperuser(cfg *config.Config, userService user.Service, authService a
 	}
 
 	logger.Infof("Superuser '%s' created successfully.", cfg.SuperuserEmail)
+}
+
+// Secretary bootstrap — ensures a default secretary account exists
+func ensureSecretary(cfg *config.Config, userService user.Service, authService auth.Service, logger echo.Logger) {
+	if cfg.SecretaryEmail == "" || cfg.SecretaryPassword == "" {
+		logger.Info("Skipping secretary creation — SECRETARY_* variables not set.")
+		return
+	}
+
+	user, err := userService.GetByUsernameOrEmail(cfg.SecretaryEmail)
+	if err == nil && user != nil {
+		logger.Infof("Secretary '%s' already exists.", cfg.SecretaryEmail)
+		return
+	}
+
+	if err := authService.Register(cfg.SecretaryName, cfg.SecretaryEmail, cfg.SecretaryPassword); err != nil {
+		logger.Errorf("Failed to register secretary: %v", err)
+		return
+	}
+
+	user, err = userService.GetByUsernameOrEmail(cfg.SecretaryName)
+	if err != nil {
+		logger.Errorf("Secretary wasn't registered correctly: %v", err)
+	}
+
+	// ⚠️ Adjust role ID here if needed — assuming 2 is the secretary role
+	if err := userService.AddRole(user.ID, 2); err != nil {
+		logger.Errorf("Failed to add Secretary role to account: %v", err)
+	}
+
+	logger.Infof("Secretary '%s' created successfully.", cfg.SecretaryEmail)
 }
