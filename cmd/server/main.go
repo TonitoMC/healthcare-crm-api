@@ -46,6 +46,7 @@ func main() {
 	// Role dependencies
 	roleRepo := role.NewRepository(db)
 	roleService := role.NewService(roleRepo)
+	roleHandler := role.NewHandler(roleService)
 
 	// User dependencies
 	userRepo := user.NewRepository(db)
@@ -74,7 +75,7 @@ func main() {
 	scheduleHandler := schedule.NewHandler(scheduleService)
 
 	// ===== Route Registration =====
-	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler)
+	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler, roleHandler)
 
 	// ===== Server Start =====
 	e.Logger.Fatal(e.Start(":8080"))

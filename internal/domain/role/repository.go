@@ -20,6 +20,7 @@ type Repository interface {
 	Delete(id int) error
 
 	// Permissions for roles
+	GetAllPermissions() ([]models.Permission, error)
 	GetPermissions(roleID int) ([]models.Permission, error)
 	AddPermission(roleID, permissionID int) error
 	RemovePermission(roleID, permissionID int) error
@@ -198,4 +199,28 @@ func (r *repository) ClearPermissions(roleID int) error {
 		return database.MapSQLError(err, "RoleRepository.ClearPermissions")
 	}
 	return nil
+}
+
+// GetAllPermissions retrieves all permissions in the system.
+func (r *repository) GetAllPermissions() ([]models.Permission, error) {
+	rows, err := r.db.Query(`SELECT id, nombre, descripcion FROM permisos ORDER BY id`)
+	if err != nil {
+		return nil, database.MapSQLError(err, "RoleRepository.GetAllPermissions")
+	}
+	defer rows.Close()
+
+	var perms []models.Permission
+	for rows.Next() {
+		var p models.Permission
+		if err := rows.Scan(&p.ID, &p.Name, &p.Description); err != nil {
+			return nil, appErr.Wrap("RoleRepository.GetAllPermissions(scan)", appErr.ErrInternal, err)
+		}
+		perms = append(perms, p)
+	}
+
+	if len(perms) == 0 {
+		return nil, appErr.Wrap("RoleRepository.GetAllPermissions", appErr.ErrNotFound, nil)
+	}
+
+	return perms, nil
 }
