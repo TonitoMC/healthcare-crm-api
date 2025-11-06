@@ -15,7 +15,6 @@ import (
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/auth"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/consultation"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/exam"
-	"github.com/tonitomc/healthcare-crm-api/internal/domain/medicalrecord"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/patient"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/rbac"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/role"
@@ -85,9 +84,9 @@ func main() {
 	patientHandler := patient.NewHandler(patientService)
 
 	// MedicalRecord dependencies
-	medicalRecordRepo := medicalrecord.NewRepository(db)
-	medicalRecordService := medicalrecord.NewService(medicalRecordRepo)
-
+	// medicalRecordRepo := medicalrecord.NewRepository(db)
+	// medicalRecordService := medicalrecord.NewService(medicalRecordRepo)
+	//
 	// Consultation dependencies
 	consultationRepo := consultation.NewRepository(db)
 	consultationService := consultation.NewService(consultationRepo)
@@ -95,7 +94,7 @@ func main() {
 
 	// Exam dependencies
 	examRepo := exam.NewRepository(db)
-	examService := exam.NewService(examRepo)
+	examService := exam.NewService(examRepo, patientService)
 	examHandler := exam.NewHandler(examService)
 
 	// Appointment dependencies
@@ -104,7 +103,7 @@ func main() {
 	appointmentHandler := appointment.NewHandler(appointmentService)
 
 	// ===== Route Registration =====
-	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler, roleHandler, patientHandler, medicalRecordHandler, consultationHandler, examHandler, appointmentHandler)
+	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler, roleHandler, patientHandler, consultationHandler, examHandler, appointmentHandler)
 
 	// ===== Server Start =====
 	e.Logger.Fatal(e.Start(":8080"))

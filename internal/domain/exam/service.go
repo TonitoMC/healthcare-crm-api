@@ -8,35 +8,60 @@ import (
 )
 
 type Service interface {
-	GetByID(id int) (*models.Exam, error)
-	GetByPatient(patientID int) ([]models.Exam, error)
+	GetByID(id int) (*models.ExamDTO, error)
+	GetByPatient(patientID int) ([]models.ExamDTO, error)
 	Create(examDTO *models.ExamCreateDTO) (int, error)
 	Update(id int, dto *models.ExamDTO) error
 	Delete(id int) error
-	GetPending() ([]models.Exam, error)
+	GetPending() ([]models.ExamDTO, error)
+}
+
+type PatientProvider interface {
+	GetNameByID(patientID int) (string, error)
 }
 
 type service struct {
-	repo Repository
+	repo            Repository
+	patientProvider PatientProvider
 }
 
-func NewService(repo Repository) Service {
-	return &service{repo: repo}
+func NewService(repo Repository, patientProvider PatientProvider) Service {
+	return &service{repo: repo, patientProvider: patientProvider}
 }
 
-func (s *service) GetByID(id int) (*models.Exam, error) {
+func (s *service) GetByID(id int) (*models.ExamDTO, error) {
 	if id <= 0 {
 		return nil, appErr.Wrap("ExamService.GetByID", appErr.ErrInvalidInput, nil)
 	}
-	return s.repo.GetByID(id)
+
+	exam, err := s.repo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.enrich(*exam)
 }
 
-func (s *service) GetByPatient(patientID int) ([]models.Exam, error) {
+func (s *service) GetByPatient(patientID int) ([]models.ExamDTO, error) {
 	if patientID <= 0 {
 		return nil, appErr.Wrap("ExamService.GetByPatient", appErr.ErrInvalidInput, nil)
 	}
 
-	return s.repo.GetByPatient(patientID)
+	exams, err := s.repo.GetByPatient(patientID)
+	if err != nil {
+		return nil, err
+	}
+
+	enriched := make([]models.ExamDTO, 0, len(exams))
+	for _, exam := range exams {
+		dto, err := s.enrich(exam)
+		if err != nil {
+			return nil, err
+		}
+		enriched = append(enriched, *dto)
+	}
+
+	return enriched, nil
 }
 
 func (s *service) Create(examDTO *models.ExamCreateDTO) (int, error) {
@@ -122,6 +147,41 @@ func (s *service) Delete(id int) error {
 	return s.repo.Delete(id)
 }
 
-func (s *service) GetPending() ([]models.Exam, error) {
-	return s.repo.GetPending()
+func (s *service) GetPending() ([]models.ExamDTO, error) {
+	pendingExams, err := s.repo.GetPending()
+	if err != nil {
+		return nil, err
+	}
+
+	enriched := make([]models.ExamDTO, 0, len(pendingExams))
+	for _, exam := range pendingExams {
+		dto, err := s.enrich(exam)
+		if err != nil {
+			return nil, err
+		}
+		enriched = append(enriched, *dto)
+	}
+
+	return enriched, nil
+}
+
+func (s *service) enrich(e models.Exam) (*models.ExamDTO, error) {
+	dto := &models.ExamDTO{
+		ID:         e.ID,
+		PacienteID: e.PacienteID,
+		ConsultaID: e.ConsultaID,
+		Tipo:       e.Tipo,
+		Fecha:      e.Fecha,
+		S3Key:      e.S3Key,
+		FileSize:   e.FileSize,
+		MimeType:   e.MimeType,
+	}
+
+	if s.patientProvider != nil {
+		if name, err := s.patientProvider.GetNameByID(e.PacienteID); err == nil {
+			dto.NombrePaciente = name
+		}
+	}
+
+	return dto, nil
 }
