@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/tonitomc/healthcare-crm-api/internal/api/middleware"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/exam/models"
+	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
 
 type Handler struct {
@@ -18,22 +19,28 @@ func NewHandler(service Service) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(e *echo.Group) {
-	exams := e.Group("/exams")
+	exams := e.Group("/exams", ErrorMiddleware()) // attach error middleware
+
 	exams.GET("/:id", h.GetByID, middleware.RequirePermission("ver-examenes"))
-	exams.POST("", h.Create, middleware.RequirePermission("crear-examenes"))
-	exams.DELETE("/:id", h.Delete, middleware.RequirePermission("eliminar-examenes"))
 	exams.GET("/pending", h.GetPending, middleware.RequirePermission("ver-examenes"))
+	exams.POST("", h.Create, middleware.RequirePermission("crear-examenes"))
+	exams.PATCH("/:id", h.Update, middleware.RequirePermission("editar-examenes"))
+	exams.DELETE("/:id", h.Delete, middleware.RequirePermission("eliminar-examenes"))
 }
+
+// ============================================================================
+// HANDLERS
+// ============================================================================
 
 func (h *Handler) GetByID(c echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid ID"})
+		return appErr.Wrap("ExamHandler.GetByID", appErr.ErrInvalidInput, err)
 	}
 
 	exam, err := h.service.GetByID(id)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return err // bubble up to middleware
 	}
 
 	return c.JSON(http.StatusOK, exam)
@@ -42,34 +49,52 @@ func (h *Handler) GetByID(c echo.Context) error {
 func (h *Handler) Create(c echo.Context) error {
 	var req models.ExamCreateDTO
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid request body"})
+		return appErr.Wrap("ExamHandler.Create", appErr.ErrInvalidRequest, err)
 	}
 
 	id, err := h.service.Create(&req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return err
 	}
 
 	return c.JSON(http.StatusCreated, echo.Map{"id": id})
 }
 
+func (h *Handler) Update(c echo.Context) error {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return appErr.Wrap("ExamHandler.Update", appErr.ErrInvalidInput, err)
+	}
+
+	var dto models.ExamDTO
+	if err := c.Bind(&dto); err != nil {
+		return appErr.Wrap("ExamHandler.Update", appErr.ErrInvalidRequest, err)
+	}
+
+	if err := h.service.Update(id, &dto); err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{"message": "Examen actualizado correctamente"})
+}
+
 func (h *Handler) Delete(c echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid ID"})
+		return appErr.Wrap("ExamHandler.Delete", appErr.ErrInvalidInput, err)
 	}
 
 	if err := h.service.Delete(id); err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return err
 	}
 
-	return c.JSON(http.StatusOK, echo.Map{"message": "Exam deleted successfully"})
+	return c.JSON(http.StatusOK, echo.Map{"message": "Examen eliminado correctamente"})
 }
 
 func (h *Handler) GetPending(c echo.Context) error {
 	exams, err := h.service.GetPending()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return err
 	}
 
 	return c.JSON(http.StatusOK, exams)
