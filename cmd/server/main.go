@@ -11,7 +11,13 @@ import (
 
 	middlewarePkg "github.com/tonitomc/healthcare-crm-api/internal/api/middleware"
 	"github.com/tonitomc/healthcare-crm-api/internal/api/routes"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/appointment"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/auth"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/consultation"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/dashboard"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/exam"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/medicalrecord"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/patient"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/rbac"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/role"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/schedule"
@@ -74,8 +80,38 @@ func main() {
 	scheduleService := schedule.NewService(scheduleRepo)
 	scheduleHandler := schedule.NewHandler(scheduleService)
 
+	// Patient dependencies
+	patientRepo := patient.NewRepository(db)
+	patientService := patient.NewService(patientRepo)
+	patientHandler := patient.NewHandler(patientService)
+
+	// MedicalRecord dependencies
+	medicalRecordRepo := medicalrecord.NewRepository(db)
+	medicalRecordService := medicalrecord.NewService(medicalRecordRepo)
+	medicalRecordHandler := medicalrecord.NewHandler(medicalRecordService)
+
+	// Consultation dependencies
+	consultationRepo := consultation.NewRepository(db)
+	consultationService := consultation.NewService(consultationRepo)
+	consultationHandler := consultation.NewHandler(consultationService)
+
+	// Exam dependencies
+	examRepo := exam.NewRepository(db)
+	examService := exam.NewService(examRepo)
+	examHandler := exam.NewHandler(examService)
+
+	// Appointment dependencies
+	appointmentRepo := appointment.NewRepository(db)
+	appointmentService := appointment.NewService(appointmentRepo)
+	appointmentHandler := appointment.NewHandler(appointmentService)
+
+	// Dashboard dependencies
+	dashboardRepo := dashboard.NewRepository(db)
+	dashboardService := dashboard.NewService(dashboardRepo)
+	dashboardHandler := dashboard.NewHandler(dashboardService)
+
 	// ===== Route Registration =====
-	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler, roleHandler)
+	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler, roleHandler, patientHandler, medicalRecordHandler, consultationHandler, examHandler, appointmentHandler, dashboardHandler)
 
 	// ===== Server Start =====
 	e.Logger.Fatal(e.Start(":8080"))
