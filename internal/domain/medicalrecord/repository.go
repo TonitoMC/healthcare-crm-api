@@ -1,6 +1,6 @@
 package medicalrecord
-//go:generate mockgen -source=repository.go -destination=mocks/repository.go -package=mocks
 
+//go:generate mockgen -source=repository.go -destination=mocks/repository.go -package=mocks
 
 import (
 	"database/sql"
@@ -13,7 +13,7 @@ import (
 type Repository interface {
 	GetByPatientID(patientID int) (*models.MedicalRecord, error)
 	Create(patientID int) error
-	Update(patientID int, record *models.MedicalRecordUpdateDTO) error
+	Update(patientID int, record *models.MedicalRecord) error
 }
 
 type repository struct {
@@ -31,7 +31,6 @@ func (r *repository) GetByPatientID(patientID int) (*models.MedicalRecord, error
 		FROM antecedentes
 		WHERE paciente_id = $1
 	`, patientID).Scan(&rec.ID, &rec.PacienteID, &rec.Medicos, &rec.Familiares, &rec.Oculares, &rec.Alergicos, &rec.Otros)
-
 	if err != nil {
 		return nil, database.MapSQLError(err, "MedicalRecordRepository.GetByPatientID")
 	}
@@ -48,13 +47,12 @@ func (r *repository) Create(patientID int) error {
 	return nil
 }
 
-func (r *repository) Update(patientID int, record *models.MedicalRecordUpdateDTO) error {
+func (r *repository) Update(patientID int, record *models.MedicalRecord) error {
 	res, err := r.db.Exec(`
 		UPDATE antecedentes
 		SET medicos = $1, familiares = $2, oculares = $3, alergicos = $4, otros = $5
 		WHERE paciente_id = $6
 	`, record.Medicos, record.Familiares, record.Oculares, record.Alergicos, record.Otros, patientID)
-
 	if err != nil {
 		return database.MapSQLError(err, "MedicalRecordRepository.Update")
 	}

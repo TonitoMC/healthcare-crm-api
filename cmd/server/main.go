@@ -87,7 +87,6 @@ func main() {
 	// MedicalRecord dependencies
 	medicalRecordRepo := medicalrecord.NewRepository(db)
 	medicalRecordService := medicalrecord.NewService(medicalRecordRepo)
-	medicalRecordHandler := medicalrecord.NewHandler(medicalRecordService)
 
 	// Consultation dependencies
 	consultationRepo := consultation.NewRepository(db)

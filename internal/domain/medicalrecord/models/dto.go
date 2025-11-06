@@ -1,9 +1,7 @@
 package models
 
-// MedicalRecord representa los antecedentes médicos de un paciente
-type MedicalRecord struct {
-	ID         int     `json:"id"`
-	PacienteID int     `json:"paciente_id"`
+// MedicalRecordUpdateDTO para actualizar antecedentes
+type MedicalRecordUpdateDTO struct {
 	Medicos    *string `json:"medicos,omitempty"`
 	Familiares *string `json:"familiares,omitempty"`
 	Oculares   *string `json:"oculares,omitempty"`
