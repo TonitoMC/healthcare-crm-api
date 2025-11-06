@@ -23,6 +23,8 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 
 	exams.GET("/:id", h.GetByID, middleware.RequirePermission("ver-examenes"))
 	exams.GET("/pending", h.GetPending, middleware.RequirePermission("ver-examenes"))
+
+	exams.GET("/patient/:patientId", h.GetByPatientID, middleware.RequirePermission("ver-examenes"))
 	exams.POST("", h.Create, middleware.RequirePermission("manejar-examenes"))
 	exams.PATCH("/:id", h.Update, middleware.RequirePermission("manejar-examenes"))
 	exams.DELETE("/:id", h.Delete, middleware.RequirePermission("manejar-examenes"))
@@ -95,6 +97,24 @@ func (h *Handler) GetPending(c echo.Context) error {
 	exams, err := h.service.GetPending()
 	if err != nil {
 		return err
+	}
+
+	return c.JSON(http.StatusOK, exams)
+}
+
+func (h *Handler) GetByPatientID(c echo.Context) error {
+	patientID, err := strconv.Atoi(c.Param("patientId"))
+	if err != nil {
+		return appErr.Wrap("ExamHandler.GetByPatientID", appErr.ErrInvalidInput, err)
+	}
+
+	exams, err := h.service.GetByPatient(patientID)
+	if err != nil {
+		return err
+	}
+
+	if len(exams) == 0 {
+		return c.JSON(http.StatusOK, []models.ExamDTO{})
 	}
 
 	return c.JSON(http.StatusOK, exams)

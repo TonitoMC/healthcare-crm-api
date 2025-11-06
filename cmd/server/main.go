@@ -6,6 +6,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
+	"github.com/tonitomc/healthcare-crm-api/internal/adapters"
 	"github.com/tonitomc/healthcare-crm-api/internal/database"
 	"github.com/tonitomc/healthcare-crm-api/pkg/config"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/auth"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/consultation"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/exam"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/medicalrecord"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/patient"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/rbac"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/role"
@@ -78,14 +80,15 @@ func main() {
 	scheduleService := schedule.NewService(scheduleRepo)
 	scheduleHandler := schedule.NewHandler(scheduleService)
 
-	// Patient dependencies
+	// Patient dependencies, handler declared further down
+	// as it works as an orchestration layer for response enrichment
 	patientRepo := patient.NewRepository(db)
 	patientService := patient.NewService(patientRepo)
-	patientHandler := patient.NewHandler(patientService)
 
+	patientProvider := &adapters.PatientAdapter{Service: patientService}
 	// MedicalRecord dependencies
-	// medicalRecordRepo := medicalrecord.NewRepository(db)
-	// medicalRecordService := medicalrecord.NewService(medicalRecordRepo)
+	recordRepo := medicalrecord.NewRepository(db)
+	recordService := medicalrecord.NewService(recordRepo)
 	//
 	// Consultation dependencies
 	consultationRepo := consultation.NewRepository(db)
@@ -94,14 +97,14 @@ func main() {
 
 	// Exam dependencies
 	examRepo := exam.NewRepository(db)
-	examService := exam.NewService(examRepo, patientService)
+	examService := exam.NewService(examRepo, patientProvider)
 	examHandler := exam.NewHandler(examService)
 
 	// Appointment dependencies
 	appointmentRepo := appointment.NewRepository(db)
 	appointmentService := appointment.NewService(appointmentRepo)
 	appointmentHandler := appointment.NewHandler(appointmentService)
-
+	patientHandler := patient.NewHandler(patientService, examService, consultationService, recordService)
 	// ===== Route Registration =====
 	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler, roleHandler, patientHandler, consultationHandler, examHandler, appointmentHandler)
 

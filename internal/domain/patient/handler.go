@@ -3,19 +3,26 @@ package patient
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/tonitomc/healthcare-crm-api/internal/api/middleware"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/consultation"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/exam"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/medicalrecord"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/patient/models"
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
 
 type Handler struct {
-	service Service
+	service             Service
+	examService         exam.Service
+	consultationService consultation.Service
+	recordService       medicalrecord.Service
 }
 
-func NewHandler(s Service) *Handler {
-	return &Handler{service: s}
+func NewHandler(s Service, examService exam.Service, consultationService consultation.Service, recordService medicalrecord.Service) *Handler {
+	return &Handler{service: s, examService: examService, consultationService: consultationService, recordService: recordService}
 }
 
 func (h *Handler) RegisterRoutes(g *echo.Group) {
@@ -23,6 +30,7 @@ func (h *Handler) RegisterRoutes(g *echo.Group) {
 
 	patients.GET("", h.GetAll, middleware.RequirePermission("ver-pacientes"))
 	patients.GET("/:id", h.GetByID, middleware.RequirePermission("ver-pacientes"))
+	patients.GET("/:id/details", h.GetDetails, middleware.RequirePermission("ver-examenes"))
 	patients.POST("", h.Create, middleware.RequirePermission("crear-pacientes"))
 	patients.PUT("/:id", h.Update, middleware.RequirePermission("editar-pacientes"))
 	patients.DELETE("/:id", h.Delete, middleware.RequirePermission("eliminar-pacientes"))
@@ -113,4 +121,47 @@ func (h *Handler) SearchByName(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, results)
+}
+
+func (h *Handler) GetDetails(c echo.Context) error {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return appErr.Wrap("PatientHandler.GetDetails.ParseID", appErr.ErrInvalidInput, err)
+	}
+
+	patient, err := h.service.GetByID(id)
+	if err != nil {
+		return err
+	}
+
+	// Parse query param
+	include := strings.Split(c.QueryParam("include"), ",")
+	includes := make(map[string]bool)
+	for _, i := range include {
+		includes[strings.TrimSpace(i)] = true
+	}
+
+	// Base response
+	response := echo.Map{"patient": patient}
+
+	// Add related data conditionally
+	if includes["exams"] && h.examService != nil {
+		if exams, err := h.examService.GetByPatient(id); err == nil {
+			response["exams"] = exams
+		}
+	}
+
+	if includes["consultations"] && h.consultationService != nil {
+		if consultations, err := h.consultationService.GetByPatient(id); err == nil {
+			response["consultations"] = consultations
+		}
+	}
+
+	if includes["record"] && h.recordService != nil {
+		if record, err := h.recordService.GetByPatientID(id); err == nil {
+			response["medical_record"] = record
+		}
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
