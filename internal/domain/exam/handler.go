@@ -23,9 +23,9 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 
 	exams.GET("/:id", h.GetByID, middleware.RequirePermission("ver-examenes"))
 	exams.GET("/pending", h.GetPending, middleware.RequirePermission("ver-examenes"))
-	exams.POST("", h.Create, middleware.RequirePermission("crear-examenes"))
-	exams.PATCH("/:id", h.Update, middleware.RequirePermission("editar-examenes"))
-	exams.DELETE("/:id", h.Delete, middleware.RequirePermission("eliminar-examenes"))
+	exams.POST("", h.Create, middleware.RequirePermission("manejar-examenes"))
+	exams.PATCH("/:id", h.Update, middleware.RequirePermission("manejar-examenes"))
+	exams.DELETE("/:id", h.Delete, middleware.RequirePermission("manejar-examenes"))
 }
 
 // ============================================================================

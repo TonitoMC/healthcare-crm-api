@@ -21,11 +21,22 @@ func NewHandler(s Service) *Handler {
 func (h *Handler) RegisterRoutes(g *echo.Group) {
 	consultations := g.Group("/consultations")
 
-	consultations.GET("/:id", h.GetByID, middleware.RequirePermission("ver-pacientes"))
-	consultations.GET("/patient/:patientId", h.GetByPatient, middleware.RequirePermission("ver-pacientes"))
-	consultations.POST("", h.Create, middleware.RequirePermission("crear-pacientes"))
-	consultations.PUT("/:id", h.Update, middleware.RequirePermission("editar-pacientes"))
-	consultations.DELETE("/:id", h.Delete, middleware.RequirePermission("eliminar-pacientes"))
+	consultations.GET("", h.GetAll, middleware.RequirePermission("ver-consultas"))
+
+	consultations.GET("/:id", h.GetByID, middleware.RequirePermission("ver-consultas"))
+	consultations.GET("/patient/:patientId", h.GetByPatient, middleware.RequirePermission("ver-consultas"))
+	consultations.POST("", h.Create, middleware.RequirePermission("manejar-consultas"))
+	consultations.PUT("/:id", h.Update, middleware.RequirePermission("manejar-consultas"))
+	consultations.DELETE("/:id", h.Delete, middleware.RequirePermission("manejar-consultas"))
+}
+
+func (h *Handler) GetAll(c echo.Context) error {
+	consultations, err := h.service.GetAll()
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, consultations)
 }
 
 func (h *Handler) GetByID(c echo.Context) error {

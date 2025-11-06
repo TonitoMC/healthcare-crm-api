@@ -99,7 +99,7 @@ func (r *repository) Create(consultation *models.Consultation) (int, error) {
 	var id int
 	err := r.db.QueryRow(`
 		INSERT INTO consultas (paciente_id, motivo, cuestionario_id, fecha, completada)
-		VALUES ($1, $2, $3, $4)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
 	`, consultation.PacienteID, consultation.Motivo, consultation.CuestionarioID, consultation.Fecha, consultation.Completada).Scan(&id)
 	if err != nil {
