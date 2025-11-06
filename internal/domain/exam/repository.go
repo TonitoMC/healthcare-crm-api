@@ -14,11 +14,10 @@ import (
 type Repository interface {
 	GetByID(id int) (*models.Exam, error)
 	GetByPatient(patientID int) ([]models.Exam, error)
-	Create(exam *models.ExamCreateDTO) (int, error)
-	Update(id int, upload *models.ExamUploadDTO) error
+	Create(exam *models.Exam) (int, error)
+	Update(exam *models.Exam) error
 	Delete(id int) error
 	GetPending() ([]models.Exam, error)
-	GetCompleted() ([]models.Exam, error)
 }
 
 type repository struct {
@@ -36,14 +35,8 @@ func (r *repository) GetByID(id int) (*models.Exam, error) {
 		FROM examenes
 		WHERE id = $1
 	`, id).Scan(&e.ID, &e.PacienteID, &e.ConsultaID, &e.Tipo, &e.Fecha, &e.S3Key, &e.FileSize, &e.MimeType)
-
 	if err != nil {
 		return nil, database.MapSQLError(err, "ExamRepository.GetByID")
-	}
-
-	e.Estado = "PENDIENTE"
-	if e.S3Key != nil && *e.S3Key != "" {
-		e.Estado = "COMPLETADO"
 	}
 
 	return &e, nil
@@ -67,38 +60,44 @@ func (r *repository) GetByPatient(patientID int) ([]models.Exam, error) {
 		if err := rows.Scan(&e.ID, &e.PacienteID, &e.ConsultaID, &e.Tipo, &e.Fecha, &e.S3Key, &e.FileSize, &e.MimeType); err != nil {
 			return nil, appErr.Wrap("ExamRepository.GetByPatient(scan)", appErr.ErrInternal, err)
 		}
-		e.Estado = "PENDIENTE"
-		if e.S3Key != nil && *e.S3Key != "" {
-			e.Estado = "COMPLETADO"
-		}
 		exams = append(exams, e)
 	}
 
 	return exams, nil
 }
 
-func (r *repository) Create(exam *models.ExamCreateDTO) (int, error) {
+func (r *repository) Create(exam *models.Exam) (int, error) {
 	var id int
 	err := r.db.QueryRow(`
-		INSERT INTO examenes (paciente_id, consulta_id, tipo)
+		INSERT INTO examenes (paciente_id, tipo, fecha)
 		VALUES ($1, $2, $3)
 		RETURNING id
-	`, exam.PacienteID, exam.ConsultaID, exam.Tipo).Scan(&id)
-
+	`,
+		exam.PacienteID,
+		exam.Tipo,
+		exam.Fecha,
+	).Scan(&id)
 	if err != nil {
 		return 0, database.MapSQLError(err, "ExamRepository.Create")
 	}
 	return id, nil
 }
 
-func (r *repository) Update(id int, upload *models.ExamUploadDTO) error {
+func (r *repository) Update(exam *models.Exam) error {
 	now := time.Now()
 	res, err := r.db.Exec(`
 		UPDATE examenes
-		SET s3_key = $1, file_size = $2, mime_type = $3, fecha = $4
-		WHERE id = $5
-	`, upload.S3Key, upload.FileSize, upload.MimeType, now, id)
-
+		SET
+			paciente_id = $1,
+			consulta_id = $2,
+			tipo = $3,
+			fecha = $4,
+			s3_key = $5,
+			file_size = $6,
+			mime_type = $7
+		WHERE id = $8
+	`, exam.PacienteID, exam.ConsultaID, exam.Tipo, now,
+		exam.S3Key, exam.FileSize, exam.MimeType, exam.ID)
 	if err != nil {
 		return database.MapSQLError(err, "ExamRepository.Update")
 	}
@@ -146,10 +145,6 @@ func (r *repository) GetPending() ([]models.Exam, error) {
 		if err := rows.Scan(&e.ID, &e.PacienteID, &e.ConsultaID, &e.Tipo, &e.Fecha, &e.S3Key, &e.FileSize, &e.MimeType, &nombrePaciente); err != nil {
 			return nil, appErr.Wrap("ExamRepository.GetPending(scan)", appErr.ErrInternal, err)
 		}
-		e.Estado = "PENDIENTE"
-		if nombrePaciente != nil {
-			e.NombrePaciente = *nombrePaciente
-		}
 		exams = append(exams, e)
 	}
 
@@ -176,10 +171,6 @@ func (r *repository) GetCompleted() ([]models.Exam, error) {
 		var nombrePaciente *string
 		if err := rows.Scan(&e.ID, &e.PacienteID, &e.ConsultaID, &e.Tipo, &e.Fecha, &e.S3Key, &e.FileSize, &e.MimeType, &nombrePaciente); err != nil {
 			return nil, appErr.Wrap("ExamRepository.GetCompleted(scan)", appErr.ErrInternal, err)
-		}
-		e.Estado = "COMPLETADO"
-		if nombrePaciente != nil {
-			e.NombrePaciente = *nombrePaciente
 		}
 		exams = append(exams, e)
 	}

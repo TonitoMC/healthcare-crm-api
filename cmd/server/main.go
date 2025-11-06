@@ -14,7 +14,6 @@ import (
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/appointment"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/auth"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/consultation"
-	"github.com/tonitomc/healthcare-crm-api/internal/domain/dashboard"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/exam"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/medicalrecord"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/patient"
@@ -105,13 +104,8 @@ func main() {
 	appointmentService := appointment.NewService(appointmentRepo)
 	appointmentHandler := appointment.NewHandler(appointmentService)
 
-	// Dashboard dependencies
-	dashboardRepo := dashboard.NewRepository(db)
-	dashboardService := dashboard.NewService(dashboardRepo)
-	dashboardHandler := dashboard.NewHandler(dashboardService)
-
 	// ===== Route Registration =====
-	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler, roleHandler, patientHandler, medicalRecordHandler, consultationHandler, examHandler, appointmentHandler, dashboardHandler)
+	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler, roleHandler, patientHandler, medicalRecordHandler, consultationHandler, examHandler, appointmentHandler)
 
 	// ===== Server Start =====
 	e.Logger.Fatal(e.Start(":8080"))

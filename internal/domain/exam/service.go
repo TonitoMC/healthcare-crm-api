@@ -1,6 +1,8 @@
 package exam
 
 import (
+	"time"
+
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/exam/models"
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
@@ -8,11 +10,10 @@ import (
 type Service interface {
 	GetByID(id int) (*models.Exam, error)
 	GetByPatient(patientID int) ([]models.Exam, error)
-	Create(exam *models.ExamCreateDTO) (int, error)
-	Update(id int, upload *models.ExamUploadDTO) error
+	Create(examDTO *models.ExamCreateDTO) (int, error)
+	Update(id int, dto *models.ExamDTO) error
 	Delete(id int) error
 	GetPending() ([]models.Exam, error)
-	GetCompleted() ([]models.Exam, error)
 }
 
 type service struct {
@@ -34,33 +35,84 @@ func (s *service) GetByPatient(patientID int) ([]models.Exam, error) {
 	if patientID <= 0 {
 		return nil, appErr.Wrap("ExamService.GetByPatient", appErr.ErrInvalidInput, nil)
 	}
+
 	return s.repo.GetByPatient(patientID)
 }
 
-func (s *service) Create(exam *models.ExamCreateDTO) (int, error) {
-	if exam.PacienteID <= 0 {
+func (s *service) Create(examDTO *models.ExamCreateDTO) (int, error) {
+	if examDTO.PacienteID <= 0 {
 		return 0, appErr.Wrap("ExamService.Create(invalid paciente_id)", appErr.ErrInvalidInput, nil)
 	}
-	if exam.Tipo == "" {
+	if examDTO.Tipo == "" {
 		return 0, appErr.Wrap("ExamService.Create(tipo required)", appErr.ErrInvalidInput, nil)
 	}
+
+	now := time.Now()
+
+	if examDTO.Fecha == nil {
+		examDTO.Fecha = &now
+	}
+
+	exam := &models.Exam{
+		PacienteID: examDTO.PacienteID,
+		Tipo:       examDTO.Tipo,
+		Fecha:      examDTO.Fecha,
+	}
+
 	return s.repo.Create(exam)
 }
 
-func (s *service) Update(id int, upload *models.ExamUploadDTO) error {
+func (s *service) Update(id int, dto *models.ExamDTO) error {
 	if id <= 0 {
-		return appErr.Wrap("ExamService.Update(invalid id)", appErr.ErrInvalidInput, nil)
+		return appErr.NewDomainError(appErr.ErrInvalidInput, "ID inválido para examen.")
 	}
-	if upload.S3Key == "" {
-		return appErr.Wrap("ExamService.Update(s3_key required)", appErr.ErrInvalidInput, nil)
+
+	// Fetch existing exam
+	existing, err := s.repo.GetByID(id)
+	if err != nil {
+		return err
 	}
-	if upload.MimeType != "application/pdf" {
-		return appErr.Wrap("ExamService.Update(only PDF allowed)", appErr.ErrInvalidInput, nil)
+
+	// PacienteID (must be positive if provided)
+	if dto.PacienteID > 0 {
+		existing.PacienteID = dto.PacienteID
+	} else if dto.PacienteID < 0 {
+		return appErr.NewDomainError(appErr.ErrInvalidInput, "El ID del paciente es inválido.")
 	}
-	if upload.FileSize <= 0 {
-		return appErr.Wrap("ExamService.Update(invalid file_size)", appErr.ErrInvalidInput, nil)
+
+	// ConsultaID (optional)
+	if dto.ConsultaID != nil {
+		existing.ConsultaID = dto.ConsultaID
 	}
-	return s.repo.Update(id, upload)
+
+	// Tipo (if provided)
+	if dto.Tipo != "" {
+		existing.Tipo = dto.Tipo
+	}
+
+	// Fecha (optional, defaults to existing)
+	if dto.Fecha != nil {
+		existing.Fecha = dto.Fecha
+	}
+
+	// Only allow updates if *all three* are present (S3Key, FileSize, MimeType)
+	if dto.S3Key != nil || dto.FileSize != nil || dto.MimeType != nil {
+		if dto.S3Key == nil || dto.FileSize == nil || dto.MimeType == nil {
+			return appErr.NewDomainError(
+				appErr.ErrInvalidInput,
+				"Campos de carga incompletos: debe incluir s3_key, file_size y mime_type.",
+			)
+		}
+		existing.S3Key = dto.S3Key
+		existing.FileSize = dto.FileSize
+		existing.MimeType = dto.MimeType
+	}
+
+	if err := s.repo.Update(existing); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *service) Delete(id int) error {
@@ -72,8 +124,4 @@ func (s *service) Delete(id int) error {
 
 func (s *service) GetPending() ([]models.Exam, error) {
 	return s.repo.GetPending()
-}
-
-func (s *service) GetCompleted() ([]models.Exam, error) {
-	return s.repo.GetCompleted()
 }
