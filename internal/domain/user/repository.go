@@ -73,6 +73,9 @@ func (r *repository) GetByID(id int) (*userModels.User, error) {
 	err := r.db.QueryRow(`SELECT id, username, correo, password_hash FROM usuarios WHERE id = $1`, id).
 		Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, appErr.Wrap("UserRepository.GetByID", appErr.ErrNotFound, nil)
+		}
 		return nil, database.MapSQLError(err, "UserRepository.GetByID")
 	}
 
