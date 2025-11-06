@@ -3,18 +3,19 @@
 package consultation
 
 import (
+	"time"
+
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/consultation/models"
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
 
 type Service interface {
+	GetAll() ([]models.Consultation, error)
 	GetByID(id int) (*models.Consultation, error)
 	GetByPatient(patientID int) ([]models.Consultation, error)
-	Create(consultation *models.ConsultationCreateDTO) (int, error)
-	Update(id int, consultation *models.ConsultationUpdateDTO) error
+	Create(dto *models.ConsultationCreateDTO) (int, error)
+	Update(id int, dto *models.ConsultationUpdateDTO) error
 	Delete(id int) error
-	GetIncomplete(patientID int) ([]models.Consultation, error)
-	MarkComplete(id int) error
 }
 
 type service struct {
@@ -23,6 +24,10 @@ type service struct {
 
 func NewService(repo Repository) Service {
 	return &service{repo: repo}
+}
+
+func (s *service) GetAll() ([]models.Consultation, error) {
+	return s.repo.GetAll()
 }
 
 func (s *service) GetByID(id int) (*models.Consultation, error) {
@@ -39,23 +44,60 @@ func (s *service) GetByPatient(patientID int) ([]models.Consultation, error) {
 	return s.repo.GetByPatient(patientID)
 }
 
-func (s *service) Create(consultation *models.ConsultationCreateDTO) (int, error) {
-	if consultation == nil || consultation.PacienteID <= 0 {
+func (s *service) Create(dto *models.ConsultationCreateDTO) (int, error) {
+	if dto == nil {
 		return 0, appErr.Wrap("ConsultationService.Create", appErr.ErrInvalidInput, nil)
 	}
-
-	if consultation.Motivo == "" {
-		consultation.Motivo = "Consulta General"
+	if dto.PacienteID <= 0 {
+		return 0, appErr.NewDomainError(appErr.ErrInvalidInput, "El ID del paciente es inválido.")
+	}
+	if dto.Motivo == "" {
+		return 0, appErr.NewDomainError(appErr.ErrInvalidInput, "El motivo de la consulta es requerido.")
+	}
+	if dto.CuestionarioID <= 0 {
+		return 0, appErr.NewDomainError(appErr.ErrInvalidInput, "El cuestionario asociado es inválido.")
 	}
 
-	return s.repo.Create(consultation)
+	now := time.Now().Truncate(24 * time.Hour)
+
+	consultation := &models.Consultation{
+		PacienteID:     dto.PacienteID,
+		Motivo:         dto.Motivo,
+		CuestionarioID: dto.CuestionarioID,
+		Fecha:          now,
+		Completada:     false,
+	}
+
+	id, err := s.repo.Create(consultation)
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
 }
 
-func (s *service) Update(id int, consultation *models.ConsultationUpdateDTO) error {
-	if id <= 0 || consultation == nil {
-		return appErr.Wrap("ConsultationService.Update", appErr.ErrInvalidInput, nil)
+func (s *service) Update(id int, dto *models.ConsultationUpdateDTO) error {
+	if id <= 0 || dto == nil {
+		return appErr.NewDomainError(appErr.ErrInvalidInput, "Datos inválidos para actualización.")
 	}
-	return s.repo.Update(id, consultation)
+
+	existing, err := s.repo.GetByID(id)
+	if err != nil {
+		return err
+	}
+
+	if dto.Motivo == "" {
+		return appErr.NewDomainError(appErr.ErrInvalidInput, "El motivo de la consulta es requerido.")
+	}
+
+	existing.Motivo = dto.Motivo
+	existing.Completada = dto.Completada
+
+	if err := s.repo.Update(existing); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *service) Delete(id int) error {
@@ -63,18 +105,4 @@ func (s *service) Delete(id int) error {
 		return appErr.Wrap("ConsultationService.Delete", appErr.ErrInvalidInput, nil)
 	}
 	return s.repo.Delete(id)
-}
-
-func (s *service) GetIncomplete(patientID int) ([]models.Consultation, error) {
-	if patientID <= 0 {
-		return nil, appErr.Wrap("ConsultationService.GetIncomplete", appErr.ErrInvalidInput, nil)
-	}
-	return s.repo.GetIncomplete(patientID)
-}
-
-func (s *service) MarkComplete(id int) error {
-	if id <= 0 {
-		return appErr.Wrap("ConsultationService.MarkComplete", appErr.ErrInvalidInput, nil)
-	}
-	return s.repo.MarkComplete(id)
 }

@@ -25,7 +25,6 @@ func (h *Handler) RegisterRoutes(g *echo.Group) {
 	consultations.GET("/patient/:patientId", h.GetByPatient, middleware.RequirePermission("ver-pacientes"))
 	consultations.POST("", h.Create, middleware.RequirePermission("crear-pacientes"))
 	consultations.PUT("/:id", h.Update, middleware.RequirePermission("editar-pacientes"))
-	consultations.PUT("/:id/complete", h.MarkComplete, middleware.RequirePermission("editar-pacientes"))
 	consultations.DELETE("/:id", h.Delete, middleware.RequirePermission("eliminar-pacientes"))
 }
 
@@ -87,19 +86,6 @@ func (h *Handler) Update(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, echo.Map{"message": "Consulta actualizada correctamente"})
-}
-
-func (h *Handler) MarkComplete(c echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		return appErr.Wrap("ConsultationHandler.MarkComplete.ParseID", appErr.ErrInvalidInput, err)
-	}
-
-	if err := h.service.MarkComplete(id); err != nil {
-		return err
-	}
-
-	return c.JSON(http.StatusOK, echo.Map{"message": "Consulta marcada como completada"})
 }
 
 func (h *Handler) Delete(c echo.Context) error {
