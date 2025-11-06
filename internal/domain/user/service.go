@@ -17,6 +17,8 @@ import (
 // Authentication (password hashing/comparison) is handled separately in auth/.
 type Service interface {
 	// User CRUD
+
+	GetAllUsers() ([]userModels.User, error)
 	CreateUser(username, email, passwordHash string) error
 	GetByID(id int) (*userModels.User, error)
 	GetByUsernameOrEmail(identifier string) (*userModels.User, error)
@@ -48,6 +50,14 @@ func NewService(repo Repository, roleService roleDomain.Service) Service {
 // -----------------------------------------------------------------------------
 // User CRUD
 // -----------------------------------------------------------------------------
+
+func (s *service) GetAllUsers() ([]userModels.User, error) {
+	users, err := s.repo.GetAll()
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
+}
 
 func (s *service) CreateUser(username, email, passwordHash string) error {
 	if username == "" || email == "" || passwordHash == "" {
@@ -123,6 +133,10 @@ func (s *service) GetUserRoles(userID int) ([]roleModels.Role, error) {
 		return nil, appErr.Wrap("UserService.GetUserRoles", appErr.ErrInvalidInput, nil)
 	}
 
+	if _, err := s.repo.GetByID(userID); err != nil {
+		return nil, err
+	}
+
 	roles, err := s.repo.GetUserRoles(userID)
 	if err != nil {
 		return nil, err
@@ -136,6 +150,23 @@ func (s *service) AddRole(userID, roleID int) error {
 		return appErr.Wrap("UserService.AddRole", appErr.ErrInvalidInput, nil)
 	}
 
+	if _, err := s.repo.GetByID(userID); err != nil {
+		return err
+	}
+
+	roles, err := s.repo.GetUserRoles(userID)
+	if err != nil {
+		return err
+	}
+
+	for _, r := range roles {
+		if r.ID == roleID {
+			// domain-level error → bubble to middleware cleanly
+			return appErr.NewDomainError(appErr.ErrConflict, "El usuario ya tiene este rol asignado")
+		}
+	}
+
+	// --- Proceed normally ---
 	if err := s.repo.AddRole(userID, roleID); err != nil {
 		return err
 	}
@@ -145,6 +176,10 @@ func (s *service) AddRole(userID, roleID int) error {
 func (s *service) RemoveRole(userID, roleID int) error {
 	if userID <= 0 || roleID <= 0 {
 		return appErr.Wrap("UserService.RemoveRole", appErr.ErrInvalidInput, nil)
+	}
+
+	if _, err := s.repo.GetByID(userID); err != nil {
+		return err
 	}
 
 	if err := s.repo.RemoveRole(userID, roleID); err != nil {
@@ -158,6 +193,10 @@ func (s *service) ClearRoles(userID int) error {
 		return appErr.Wrap("UserService.ClearRoles", appErr.ErrInvalidInput, nil)
 	}
 
+	if _, err := s.repo.GetByID(userID); err != nil {
+		return err
+	}
+
 	if err := s.repo.ClearRoles(userID); err != nil {
 		return err
 	}
@@ -169,13 +208,15 @@ func (s *service) GetRolesAndPermissions(userID int) ([]roleModels.Role, []roleM
 		return nil, nil, appErr.Wrap("UserService.GetRolesAndPermissions", appErr.ErrInvalidInput, nil)
 	}
 
-	// Step 1: Get roles for user
-	roles, err := s.repo.GetUserRoles(userID)
-	if err != nil {
-		return nil, nil, err // already wrapped in repo
+	if _, err := s.repo.GetByID(userID); err != nil {
+		return nil, nil, err
 	}
 
-	// Step 2: For each role, get its permissions via role.Service
+	roles, err := s.repo.GetUserRoles(userID)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	var allPerms []roleModels.Permission
 	permSeen := make(map[int]bool)
 
@@ -190,7 +231,6 @@ func (s *service) GetRolesAndPermissions(userID int) ([]roleModels.Role, []roleM
 			)
 		}
 
-		// Deduplicate permissions across roles
 		for _, p := range perms {
 			if !permSeen[p.ID] {
 				allPerms = append(allPerms, p)

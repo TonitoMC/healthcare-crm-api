@@ -50,6 +50,7 @@ func main() {
 	// User dependencies
 	userRepo := user.NewRepository(db)
 	userService := user.NewService(userRepo, roleService)
+	userHandler := user.NewHandler(userService)
 
 	rbacService := rbac.NewService(userService, roleService)
 
@@ -73,7 +74,7 @@ func main() {
 	scheduleHandler := schedule.NewHandler(scheduleService)
 
 	// ===== Route Registration =====
-	routes.RegisterRoutes(e, authHandler, scheduleHandler)
+	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler)
 
 	// ===== Server Start =====
 	e.Logger.Fatal(e.Start(":8080"))
