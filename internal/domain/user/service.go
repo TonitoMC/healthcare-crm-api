@@ -17,7 +17,6 @@ import (
 // Authentication (password hashing/comparison) is handled separately in auth/.
 type Service interface {
 	// User CRUD
-
 	GetAllUsers() ([]userModels.User, error)
 	CreateUser(username, email, passwordHash string) error
 	GetByID(id int) (*userModels.User, error)

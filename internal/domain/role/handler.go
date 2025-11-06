@@ -24,7 +24,7 @@ func NewHandler(s Service) *Handler {
 func (h *Handler) RegisterRoutes(g *echo.Group) {
 	roleGroup := g.Group("/role", ErrorMiddleware())
 
-	roleGroup.GET("/permissions", h.GetAllPermissions, middleware.RequirePermission("manejar-roles"))
+	roleGroup.GET("/all/permissions", h.GetAllPermissions, middleware.RequirePermission("manejar-roles"))
 
 	// --- Role CRUD ---
 	roleGroup.GET("", h.GetAllRoles, middleware.RequirePermission("manejar-roles"))
