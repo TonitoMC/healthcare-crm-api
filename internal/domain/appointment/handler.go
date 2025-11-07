@@ -23,7 +23,9 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	appointments.GET("/:id", h.GetByID, middleware.RequirePermission("ver-citas"))
 	appointments.GET("/today", h.GetToday, middleware.RequirePermission("ver-citas"))
 	appointments.GET("/date/:date", h.GetByDate, middleware.RequirePermission("ver-citas"))
+	appointments.GET("/available-slots/:date", h.GetAvailableSlots, middleware.RequirePermission("ver-citas"))
 	appointments.POST("", h.Create, middleware.RequirePermission("crear-citas"))
+	appointments.POST("/with-new-patient", h.CreateWithNewPatient, middleware.RequirePermission("crear-citas"))
 	appointments.PUT("/:id", h.Update, middleware.RequirePermission("editar-citas"))
 	appointments.DELETE("/:id", h.Delete, middleware.RequirePermission("eliminar-citas"))
 }
@@ -97,4 +99,37 @@ func (h *Handler) Delete(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
 	}
 	return c.JSON(http.StatusOK, echo.Map{"message": "Appointment deleted successfully"})
+}
+
+func (h *Handler) CreateWithNewPatient(c echo.Context) error {
+	var req models.AppointmentWithNewPatientDTO
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid request body"})
+	}
+	id, err := h.service.CreateWithNewPatient(&req)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+	return c.JSON(http.StatusCreated, echo.Map{"id": id})
+}
+
+func (h *Handler) GetAvailableSlots(c echo.Context) error {
+	dateStr := c.Param("date")
+	date, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid date format, use YYYY-MM-DD"})
+	}
+
+	slotDuration := int64(900) // 15 min default
+	if dur := c.QueryParam("duration"); dur != "" {
+		if parsed, err := strconv.ParseInt(dur, 10, 64); err == nil {
+			slotDuration = parsed
+		}
+	}
+
+	slots, err := h.service.GetAvailableSlots(date, slotDuration)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, slots)
 }

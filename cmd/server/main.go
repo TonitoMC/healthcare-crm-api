@@ -100,9 +100,13 @@ func main() {
 	examService := exam.NewService(examRepo, patientProvider)
 	examHandler := exam.NewHandler(examService)
 
+	// Adapters para appointments
+	patientAdapter := adapters.NewPatientAdapter(patientService)
+	scheduleAdapter := adapters.NewScheduleAdapter(scheduleService)
+
 	// Appointment dependencies
 	appointmentRepo := appointment.NewRepository(db)
-	appointmentService := appointment.NewService(appointmentRepo)
+	appointmentService := appointment.NewService(appointmentRepo, patientAdapter, scheduleAdapter)
 	appointmentHandler := appointment.NewHandler(appointmentService)
 	patientHandler := patient.NewHandler(patientService, examService, consultationService, recordService)
 	// ===== Route Registration =====

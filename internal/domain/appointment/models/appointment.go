@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	patientModels "github.com/tonitomc/healthcare-crm-api/internal/domain/patient/models"
+)
 
 type Appointment struct {
 	ID         int       `json:"id"`
@@ -24,4 +28,19 @@ type AppointmentCreateDTO struct {
 type AppointmentUpdateDTO struct {
 	Fecha    *time.Time `json:"fecha,omitempty"`
 	Duracion *int64     `json:"duracion,omitempty"`
+}
+
+// AppointmentWithNewPatientDTO - Para crear paciente y cita en una transacción
+type AppointmentWithNewPatientDTO struct {
+	PatientData     patientModels.PatientCreateDTO `json:"patient_data" validate:"required"`
+	AppointmentData struct {
+		Fecha    time.Time `json:"fecha" validate:"required"`
+		Duracion int64     `json:"duracion" validate:"required"`
+	} `json:"appointment_data" validate:"required"`
+}
+
+type AvailabilitySlot struct {
+	Start     time.Time `json:"start"`
+	End       time.Time `json:"end"`
+	Available bool      `json:"available"`
 }
