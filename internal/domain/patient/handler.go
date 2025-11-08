@@ -152,7 +152,7 @@ func (h *Handler) GetDetails(c echo.Context) error {
 	}
 
 	if includes["consultations"] && h.consultationService != nil {
-		if consultations, err := h.consultationService.GetByPatient(id); err == nil {
+		if consultations, err := h.consultationService.GetByPatientWithDetails(id); err == nil {
 			response["consultations"] = consultations
 		}
 	}
