@@ -3,11 +3,17 @@
 package consultation
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/consultation/models"
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
+
+// QuestionnaireValidator validates a set of answers against its questionnaire definition.
+type QuestionnaireValidator interface {
+	Validate(questionnaireID int, answers json.RawMessage) error
+}
 
 type Service interface {
 	GetAll() ([]models.Consultation, error)
@@ -33,14 +39,20 @@ type Service interface {
 	CreateTreatment(dto *models.TreatmentCreateDTO) (int, error)
 	UpdateTreatment(id int, dto *models.TreatmentUpdateDTO) error
 	DeleteTreatment(id int) error
+
+	GetAnswersByConsultation(consultationID int) (*models.Answers, error)
+	AddAnswers(consultaID int, dto *models.AnswersCreateDTO) (int, error)
+	UpdateAnswers(consultaID int, dto *models.AnswersUpdateDTO) error
+	DeleteAnswers(consultaID int) error
 }
 
 type service struct {
-	repo Repository
+	repo      Repository
+	validator QuestionnaireValidator
 }
 
-func NewService(repo Repository) Service {
-	return &service{repo: repo}
+func NewService(repo Repository, validator QuestionnaireValidator) Service {
+	return &service{repo: repo, validator: validator}
 }
 
 func (s *service) GetAll() ([]models.Consultation, error) {
@@ -82,13 +94,10 @@ func (s *service) GetByPatientWithDetails(patientID int) ([]models.ConsultationW
 		}
 
 		result = append(result, models.ConsultationWithDetails{
-			ID:             c.ID,
-			PacienteID:     c.PacienteID,
-			Motivo:         c.Motivo,
-			CuestionarioID: c.CuestionarioID,
-			Fecha:          c.Fecha.Format("2006-01-02"),
-			Completada:     c.Completada,
-			Diagnostics:    diagDetails,
+			ID:          c.ID,
+			PacienteID:  c.PacienteID,
+			Completada:  c.Completada,
+			Diagnostics: diagDetails,
 		})
 	}
 
@@ -356,4 +365,88 @@ func (s *service) DeleteTreatment(id int) error {
 		return appErr.NewDomainError(appErr.ErrInvalidInput, "El ID del tratamiento es inválido.")
 	}
 	return s.repo.DeleteTreatment(id)
+}
+
+// --- ANSWERS ---
+
+func (s *service) GetAnswersByConsultation(consultationID int) (*models.Answers, error) {
+	if consultationID <= 0 {
+		return nil, appErr.NewDomainError(appErr.ErrInvalidInput, "El ID de la consulta es inválido.")
+	}
+
+	answers, err := s.repo.GetAnswersByConsultation(consultationID)
+	if err != nil {
+		return nil, err
+	}
+
+	return answers, nil
+}
+
+func (s *service) AddAnswers(consultaID int, dto *models.AnswersCreateDTO) (int, error) {
+	if dto == nil {
+		return 0, appErr.NewDomainError(appErr.ErrInvalidInput, "Datos de respuestas inválidos.")
+	}
+	if consultaID <= 0 {
+		return 0, appErr.NewDomainError(appErr.ErrInvalidInput, "El ID de la consulta es inválido.")
+	}
+	if dto.CuestionarioID <= 0 {
+		return 0, appErr.NewDomainError(appErr.ErrInvalidInput, "El ID del cuestionario es inválido.")
+	}
+
+	// --- Rule: only one answers record per consultation ---
+	existing, err := s.repo.GetAnswersByConsultation(consultaID)
+	if err == nil && existing != nil {
+		return 0, appErr.NewDomainError(appErr.ErrConflict, "Ya existen respuestas para esta consulta.")
+	}
+
+	// --- Validate answers through external service ---
+	if err := s.validator.Validate(dto.CuestionarioID, dto.Respuestas); err != nil {
+		return 0, appErr.Wrap("ConsultationService.AddAnswers.Validate", appErr.ErrInvalidInput, err)
+	}
+
+	a := &models.Answers{
+		ConsultaID:     consultaID,
+		CuestionarioID: dto.CuestionarioID,
+		Respuestas:     dto.Respuestas,
+	}
+
+	id, err := s.repo.AddAnswers(a)
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
+}
+
+func (s *service) UpdateAnswers(consultaID int, dto *models.AnswersUpdateDTO) error {
+	if dto == nil {
+		return appErr.NewDomainError(appErr.ErrInvalidInput, "Datos de respuestas inválidos.")
+	}
+	if consultaID <= 0 {
+		return appErr.NewDomainError(appErr.ErrInvalidInput, "El ID de la consulta es inválido.")
+	}
+
+	existing, err := s.repo.GetAnswersByConsultation(consultaID)
+	if err != nil {
+		return appErr.NewDomainError(appErr.ErrNotFound, "No existen respuestas asociadas a esta consulta.")
+	}
+
+	// --- Validate new answers ---
+	if err := s.validator.Validate(existing.CuestionarioID, dto.Respuestas); err != nil {
+		return appErr.Wrap("ConsultationService.UpdateAnswers.Validate", appErr.ErrInvalidInput, err)
+	}
+
+	existing.Respuestas = dto.Respuestas
+	if err := s.repo.UpdateAnswers(existing); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *service) DeleteAnswers(consultaID int) error {
+	if consultaID <= 0 {
+		return appErr.NewDomainError(appErr.ErrInvalidInput, "El ID de la consulta es inválido.")
+	}
+	return s.repo.DeleteAnswers(consultaID)
 }

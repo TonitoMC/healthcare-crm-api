@@ -46,6 +46,14 @@ func (h *Handler) RegisterRoutes(g *echo.Group) {
 	consultations.POST("/:id/diagnostics/:diagId/treatments", h.CreateTreatment, middleware.RequirePermission("manejar-consultas"))
 	consultations.PUT("/:id/diagnostics/:diagId/treatments/:treatmentId", h.UpdateTreatment, middleware.RequirePermission("manejar-consultas"))
 	consultations.DELETE("/:id/diagnostics/:diagId/treatments/:treatmentId", h.DeleteTreatment, middleware.RequirePermission("manejar-consultas"))
+
+	// Answers
+
+	// --- Answers ---
+	consultations.GET("/:id/answers", h.GetAnswersByConsultation, middleware.RequirePermission("ver-consultas"))
+	consultations.POST("/:id/answers", h.AddAnswers, middleware.RequirePermission("manejar-consultas"))
+	consultations.PUT("/:id/answers", h.UpdateAnswers, middleware.RequirePermission("manejar-consultas"))
+	consultations.DELETE("/:id/answers", h.DeleteAnswers, middleware.RequirePermission("manejar-consultas"))
 }
 
 // ===================== CONSULTATIONS =====================
@@ -320,4 +328,75 @@ func (h *Handler) DeleteTreatment(c echo.Context) error {
 		return err
 	}
 	return c.JSON(http.StatusOK, echo.Map{"message": "Tratamiento eliminado correctamente"})
+}
+
+func (h *Handler) GetAnswersByConsultation(c echo.Context) error {
+	consultationID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return appErr.Wrap("ConsultationHandler.GetAnswersByConsultation.ParseID", appErr.ErrInvalidInput, err)
+	}
+
+	answers, err := h.service.GetAnswersByConsultation(consultationID)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, answers)
+}
+
+func (h *Handler) AddAnswers(c echo.Context) error {
+	consultationID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return appErr.Wrap("ConsultationHandler.AddAnswers.ParseID", appErr.ErrInvalidInput, err)
+	}
+
+	var req models.AnswersCreateDTO
+	if err := c.Bind(&req); err != nil {
+		return appErr.Wrap("ConsultationHandler.AddAnswers.Bind", appErr.ErrInvalidInput, err)
+	}
+
+	id, err := h.service.AddAnswers(consultationID, &req)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusCreated, echo.Map{
+		"id":      id,
+		"message": "Respuestas registradas correctamente",
+	})
+}
+
+func (h *Handler) UpdateAnswers(c echo.Context) error {
+	consultationID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return appErr.Wrap("ConsultationHandler.UpdateAnswers.ParseID", appErr.ErrInvalidInput, err)
+	}
+
+	var req models.AnswersUpdateDTO
+	if err := c.Bind(&req); err != nil {
+		return appErr.Wrap("ConsultationHandler.UpdateAnswers.Bind", appErr.ErrInvalidInput, err)
+	}
+
+	if err := h.service.UpdateAnswers(consultationID, &req); err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{
+		"message": "Respuestas actualizadas correctamente",
+	})
+}
+
+func (h *Handler) DeleteAnswers(c echo.Context) error {
+	consultationID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return appErr.Wrap("ConsultationHandler.DeleteAnswers.ParseID", appErr.ErrInvalidInput, err)
+	}
+
+	if err := h.service.DeleteAnswers(consultationID); err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{
+		"message": "Respuestas eliminadas correctamente",
+	})
 }
