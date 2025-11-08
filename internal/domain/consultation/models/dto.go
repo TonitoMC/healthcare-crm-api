@@ -1,5 +1,7 @@
 package models
 
+import "encoding/json"
+
 type ConsultationCreateDTO struct {
 	PacienteID     int    `json:"paciente_id" validate:"required"`
 	Motivo         string `json:"motivo"`
@@ -39,4 +41,13 @@ type TreatmentUpdateDTO struct {
 	Dosificacion     string
 	Tiempo           string
 	Frecuencia       string
+}
+
+type AnswersCreateDTO struct {
+	CuestionarioID int             `json:"cuestionario_id"`
+	Respuestas     json.RawMessage `json:"respuestas"`
+}
+
+type AnswersUpdateDTO struct {
+	Respuestas json.RawMessage `json:"respuestas"`
 }

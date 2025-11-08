@@ -32,10 +32,17 @@ type Repository interface {
 	CreateTreatment(t *models.Treatment) (int, error)
 	UpdateTreatment(t *models.Treatment) error
 	DeleteTreatment(id int) error
+
+	// --- Answers (Respuestas Cuestionarios) ---
+	GetAnswersByConsultation(consultationID int) (*models.Answers, error)
+	AddAnswers(a *models.Answers) (int, error)
+	UpdateAnswers(a *models.Answers) error
+	DeleteAnswers(consultationID int) error
 }
 
 type repository struct {
-	db *sql.DB
+	db        *sql.DB
+	validator QuestionnaireValidator
 }
 
 func NewRepository(db *sql.DB) Repository {
@@ -340,5 +347,69 @@ func (r *repository) DeleteTreatment(id int) error {
 		return appErr.Wrap("ConsultationRepository.DeleteTreatment", appErr.ErrNotFound, nil)
 	}
 
+	return nil
+}
+
+// --- ANSWERS IMPLEMENTATION ---
+
+func (r *repository) GetAnswersByConsultation(consultationID int) (*models.Answers, error) {
+	var a models.Answers
+	err := r.db.QueryRow(`
+		SELECT rc.id, rc.consulta_id, rc.cuestionario_id, rc.respuestas
+		FROM respuestas_cuestionarios rc
+		WHERE rc.consulta_id = $1
+	`, consultationID).Scan(
+		&a.ID,
+		&a.ConsultaID,
+		&a.CuestionarioID,
+		&a.Respuestas,
+	)
+	if err != nil {
+		return nil, database.MapSQLError(err, "ConsultationRepository.GetAnswersByConsultation")
+	}
+	return &a, nil
+}
+
+func (r *repository) AddAnswers(a *models.Answers) (int, error) {
+	var id int
+	err := r.db.QueryRow(`
+		INSERT INTO respuestas_cuestionarios (consulta_id, cuestionario_id, respuestas)
+		VALUES ($1, $2, $3)
+		RETURNING id
+	`, a.ConsultaID, a.CuestionarioID, a.Respuestas).Scan(&id)
+	if err != nil {
+		return 0, database.MapSQLError(err, "ConsultationRepository.AddAnswers")
+	}
+	return id, nil
+}
+
+func (r *repository) UpdateAnswers(a *models.Answers) error {
+	res, err := r.db.Exec(`
+		UPDATE respuestas_cuestionarios
+		SET respuestas = $1
+		WHERE consulta_id = $2
+	`, a.Respuestas, a.ConsultaID)
+	if err != nil {
+		return database.MapSQLError(err, "ConsultationRepository.UpdateAnswers")
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return appErr.Wrap("ConsultationRepository.UpdateAnswers", appErr.ErrNotFound, nil)
+	}
+	return nil
+}
+
+func (r *repository) DeleteAnswers(consultationID int) error {
+	res, err := r.db.Exec(`
+		DELETE FROM respuestas_cuestionarios
+		WHERE consulta_id = $1
+	`, consultationID)
+	if err != nil {
+		return database.MapSQLError(err, "ConsultationRepository.DeleteAnswers")
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return appErr.Wrap("ConsultationRepository.DeleteAnswers", appErr.ErrNotFound, nil)
+	}
 	return nil
 }
