@@ -6,12 +6,18 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
+	"github.com/tonitomc/healthcare-crm-api/internal/adapters"
 	"github.com/tonitomc/healthcare-crm-api/internal/database"
 	"github.com/tonitomc/healthcare-crm-api/pkg/config"
 
 	middlewarePkg "github.com/tonitomc/healthcare-crm-api/internal/api/middleware"
 	"github.com/tonitomc/healthcare-crm-api/internal/api/routes"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/appointment"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/auth"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/consultation"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/exam"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/medicalrecord"
+	"github.com/tonitomc/healthcare-crm-api/internal/domain/patient"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/rbac"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/role"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/schedule"
@@ -46,6 +52,7 @@ func main() {
 	// Role dependencies
 	roleRepo := role.NewRepository(db)
 	roleService := role.NewService(roleRepo)
+	roleHandler := role.NewHandler(roleService)
 
 	// User dependencies
 	userRepo := user.NewRepository(db)
@@ -73,8 +80,37 @@ func main() {
 	scheduleService := schedule.NewService(scheduleRepo)
 	scheduleHandler := schedule.NewHandler(scheduleService)
 
+	// Patient dependencies, handler declared further down
+	// as it works as an orchestration layer for response enrichment
+	patientRepo := patient.NewRepository(db)
+	patientService := patient.NewService(patientRepo)
+
+	patientProvider := &adapters.PatientAdapter{Service: patientService}
+	// MedicalRecord dependencies
+	recordRepo := medicalrecord.NewRepository(db)
+	recordService := medicalrecord.NewService(recordRepo)
+	//
+	// Consultation dependencies
+	consultationRepo := consultation.NewRepository(db)
+	consultationService := consultation.NewService(consultationRepo)
+	consultationHandler := consultation.NewHandler(consultationService)
+
+	// Exam dependencies
+	examRepo := exam.NewRepository(db)
+	examService := exam.NewService(examRepo, patientProvider)
+	examHandler := exam.NewHandler(examService)
+
+	// Adapters para appointments
+	patientAdapter := adapters.NewPatientAdapter(patientService)
+	scheduleAdapter := adapters.NewScheduleAdapter(scheduleService)
+
+	// Appointment dependencies
+	appointmentRepo := appointment.NewRepository(db)
+	appointmentService := appointment.NewService(appointmentRepo, patientAdapter, scheduleAdapter)
+	appointmentHandler := appointment.NewHandler(appointmentService)
+	patientHandler := patient.NewHandler(patientService, examService, consultationService, recordService)
 	// ===== Route Registration =====
-	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler)
+	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler, roleHandler, patientHandler, consultationHandler, examHandler, appointmentHandler)
 
 	// ===== Server Start =====
 	e.Logger.Fatal(e.Start(":8080"))

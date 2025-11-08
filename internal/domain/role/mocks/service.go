@@ -76,6 +76,21 @@ func (mr *MockServiceMockRecorder) DeleteRole(id interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRole", reflect.TypeOf((*MockService)(nil).DeleteRole), id)
 }
 
+// GetAllPermissions mocks base method.
+func (m *MockService) GetAllPermissions() ([]models.Permission, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAllPermissions")
+	ret0, _ := ret[0].([]models.Permission)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAllPermissions indicates an expected call of GetAllPermissions.
+func (mr *MockServiceMockRecorder) GetAllPermissions() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllPermissions", reflect.TypeOf((*MockService)(nil).GetAllPermissions))
+}
+
 // GetAllRoles mocks base method.
 func (m *MockService) GetAllRoles() ([]models.Role, error) {
 	m.ctrl.T.Helper()

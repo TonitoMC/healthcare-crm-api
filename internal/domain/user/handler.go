@@ -25,7 +25,6 @@ func (h *Handler) RegisterRoutes(g *echo.Group) {
 	userGroup := g.Group("/user", ErrorMiddleware())
 
 	// Read operations
-
 	userGroup.GET("", h.GetAll, middleware.RequirePermission("manejar-usuarios"))
 	userGroup.GET("/:id", h.GetByID, middleware.RequirePermission("manejar-usuarios"))
 	userGroup.GET("/search", h.GetByUsernameOrEmail, middleware.RequirePermission("manejar-usuarios"))

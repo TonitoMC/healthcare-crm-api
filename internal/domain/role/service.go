@@ -14,6 +14,7 @@ type Service interface {
 	UpdateRole(role *models.Role) error
 	DeleteRole(id int) error
 
+	GetAllPermissions() ([]models.Permission, error) // ✅ New
 	GetPermissions(roleID int) ([]models.Permission, error)
 	UpdateRolePermissions(roleID int, permissionIDs []int) error
 	AddPermission(roleID, permissionID int) error
@@ -143,4 +144,12 @@ func (s *service) UpdateRolePermissions(roleID int, permissionIDs []int) error {
 	}
 
 	return nil
+}
+
+func (s *service) GetAllPermissions() ([]models.Permission, error) {
+	perms, err := s.repo.GetAllPermissions()
+	if err != nil {
+		return nil, err
+	}
+	return perms, nil
 }

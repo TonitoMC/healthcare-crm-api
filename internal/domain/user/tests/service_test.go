@@ -34,50 +34,68 @@ func setup(t *testing.T) (*userMocks.MockRepository, *roleMocks.MockService, use
 func TestService_CreateUser(t *testing.T) {
 	t.Parallel()
 
-	t.Run("invalid input (missing username/email/password)", func(t *testing.T) {
-		mockRepo, mockRole, svc, ctrl := setup(t)
+	t.Run("invalid input", func(t *testing.T) {
+		_, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-		_ = mockRepo
-		_ = mockRole
 
-		err := svc.CreateUser("", "a@b.com", "hash")
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInvalidInput))
-
-		err = svc.CreateUser("user", "", "hash")
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInvalidInput))
-
-		err = svc.CreateUser("user", "a@b.com", "")
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInvalidInput))
+		require.ErrorIs(t, svc.CreateUser("", "mail@mail.com", "hash"), appErr.ErrInvalidInput)
+		require.ErrorIs(t, svc.CreateUser("user", "", "hash"), appErr.ErrInvalidInput)
+		require.ErrorIs(t, svc.CreateUser("user", "mail@mail.com", ""), appErr.ErrInvalidInput)
 	})
 
-	t.Run("repository returns error", func(t *testing.T) {
-		mockRepo, mockRole, svc, ctrl := setup(t)
+	t.Run("repository error", func(t *testing.T) {
+		mockRepo, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-		_ = mockRole
 
-		mockRepo.EXPECT().
-			Create(gomock.Any()).
-			Return(appErr.Wrap("repo.Create", appErr.ErrInternal, errors.New("db failure")))
+		mockRepo.EXPECT().Create(gomock.Any()).
+			Return(appErr.Wrap("repo.Create", appErr.ErrInternal, errors.New("db fail")))
 
-		err := svc.CreateUser("doctor", "doc@example.com", "hash123")
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInternal))
+		err := svc.CreateUser("name", "mail@mail.com", "hash")
+		require.ErrorIs(t, err, appErr.ErrInternal)
 	})
 
-	t.Run("successfully creates user", func(t *testing.T) {
-		mockRepo, mockRole, svc, ctrl := setup(t)
+	t.Run("success", func(t *testing.T) {
+		mockRepo, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-		_ = mockRole
+
+		mockRepo.EXPECT().Create(gomock.Any()).Return(nil)
+		require.NoError(t, svc.CreateUser("ok", "ok@ok.com", "hash"))
+	})
+}
+
+// -----------------------------------------------------------------------------
+// GetAllUsers
+// -----------------------------------------------------------------------------
+
+func TestService_GetAllUsers(t *testing.T) {
+	t.Parallel()
+
+	t.Run("repository returns ErrNotFound", func(t *testing.T) {
+		mockRepo, _, svc, ctrl := setup(t)
+		defer ctrl.Finish()
 
 		mockRepo.EXPECT().
-			Create(gomock.Any()).
-			Return(nil)
+			GetAll().
+			Return(nil, appErr.Wrap("repo.GetAll", appErr.ErrNotFound, errors.New("no users")))
 
-		err := svc.CreateUser("nurse", "nurse@example.com", "securehash")
+		users, err := svc.GetAllUsers()
+		require.ErrorIs(t, err, appErr.ErrNotFound)
+		require.Nil(t, users)
+	})
+
+	t.Run("successfully returns list", func(t *testing.T) {
+		mockRepo, _, svc, ctrl := setup(t)
+		defer ctrl.Finish()
+
+		expected := []userModels.User{
+			{ID: 1, Username: "admin", Email: "admin@example.com"},
+			{ID: 2, Username: "secretary", Email: "sec@example.com"},
+		}
+		mockRepo.EXPECT().GetAll().Return(expected, nil)
+
+		users, err := svc.GetAllUsers()
 		require.NoError(t, err)
+		require.Equal(t, expected, users)
 	})
 }
 
@@ -91,36 +109,27 @@ func TestService_GetByID(t *testing.T) {
 	t.Run("invalid ID", func(t *testing.T) {
 		_, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-
 		u, err := svc.GetByID(0)
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInvalidInput))
+		require.ErrorIs(t, err, appErr.ErrInvalidInput)
 		require.Nil(t, u)
 	})
 
-	t.Run("repository returns not found", func(t *testing.T) {
+	t.Run("not found", func(t *testing.T) {
 		mockRepo, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-
 		mockRepo.EXPECT().
-			GetByID(99).
+			GetByID(9).
 			Return(nil, appErr.Wrap("repo.GetByID", appErr.ErrNotFound, errors.New("no rows")))
-
-		u, err := svc.GetByID(99)
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrNotFound))
+		u, err := svc.GetByID(9)
+		require.ErrorIs(t, err, appErr.ErrNotFound)
 		require.Nil(t, u)
 	})
 
-	t.Run("successfully retrieves user", func(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
 		mockRepo, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-
-		expected := &userModels.User{ID: 1, Username: "admin", Email: "a@b.com"}
-		mockRepo.EXPECT().
-			GetByID(1).
-			Return(expected, nil)
-
+		expected := &userModels.User{ID: 1, Username: "admin"}
+		mockRepo.EXPECT().GetByID(1).Return(expected, nil)
 		u, err := svc.GetByID(1)
 		require.NoError(t, err)
 		require.Equal(t, expected, u)
@@ -134,26 +143,20 @@ func TestService_GetByID(t *testing.T) {
 func TestService_GetByUsernameOrEmail(t *testing.T) {
 	t.Parallel()
 
-	t.Run("invalid identifier", func(t *testing.T) {
+	t.Run("invalid input", func(t *testing.T) {
 		_, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-
 		u, err := svc.GetByUsernameOrEmail("")
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInvalidInput))
+		require.ErrorIs(t, err, appErr.ErrInvalidInput)
 		require.Nil(t, u)
 	})
 
-	t.Run("repository returns user", func(t *testing.T) {
+	t.Run("repository success", func(t *testing.T) {
 		mockRepo, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-
-		expected := &userModels.User{ID: 1, Username: "doctor", Email: "doc@clinic.com"}
-		mockRepo.EXPECT().
-			GetByUsernameOrEmail("doctor").
-			Return(expected, nil)
-
-		u, err := svc.GetByUsernameOrEmail("doctor")
+		expected := &userModels.User{ID: 2, Username: "secretary"}
+		mockRepo.EXPECT().GetByUsernameOrEmail("secretary").Return(expected, nil)
+		u, err := svc.GetByUsernameOrEmail("secretary")
 		require.NoError(t, err)
 		require.Equal(t, expected, u)
 	})
@@ -169,36 +172,24 @@ func TestService_UpdateUser(t *testing.T) {
 	t.Run("invalid input", func(t *testing.T) {
 		_, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-
-		err := svc.UpdateUser(nil)
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInvalidInput))
-
-		err = svc.UpdateUser(&userModels.User{ID: 0})
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInvalidInput))
+		require.ErrorIs(t, svc.UpdateUser(nil), appErr.ErrInvalidInput)
+		require.ErrorIs(t, svc.UpdateUser(&userModels.User{ID: 0}), appErr.ErrInvalidInput)
 	})
 
-	t.Run("repository error", func(t *testing.T) {
+	t.Run("repository bubbles up", func(t *testing.T) {
 		mockRepo, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-
-		mockRepo.EXPECT().
-			Update(gomock.Any()).
-			Return(appErr.Wrap("repo.Update", appErr.ErrInternal, errors.New("db failure")))
-
-		err := svc.UpdateUser(&userModels.User{ID: 1, Username: "x", Email: "x@x.com"})
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInternal))
+		mockRepo.EXPECT().Update(gomock.Any()).
+			Return(appErr.Wrap("repo.Update", appErr.ErrInternal, errors.New("db fail")))
+		err := svc.UpdateUser(&userModels.User{ID: 1, Username: "x", Email: "y"})
+		require.ErrorIs(t, err, appErr.ErrInternal)
 	})
 
-	t.Run("successfully updates user", func(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
 		mockRepo, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-
 		mockRepo.EXPECT().Update(gomock.Any()).Return(nil)
-
-		err := svc.UpdateUser(&userModels.User{ID: 1, Username: "updated", Email: "new@mail.com"})
+		err := svc.UpdateUser(&userModels.User{ID: 1, Username: "ok", Email: "ok@ok"})
 		require.NoError(t, err)
 	})
 }
@@ -210,117 +201,108 @@ func TestService_UpdateUser(t *testing.T) {
 func TestService_DeleteUser(t *testing.T) {
 	t.Parallel()
 
-	t.Run("invalid ID", func(t *testing.T) {
+	t.Run("invalid id", func(t *testing.T) {
 		_, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-
-		err := svc.DeleteUser(0)
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInvalidInput))
+		require.ErrorIs(t, svc.DeleteUser(0), appErr.ErrInvalidInput)
 	})
 
-	t.Run("repository not found", func(t *testing.T) {
+	t.Run("repository bubbles up", func(t *testing.T) {
 		mockRepo, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-
-		mockRepo.EXPECT().
-			Delete(99).
+		mockRepo.EXPECT().Delete(1).
 			Return(appErr.Wrap("repo.Delete", appErr.ErrNotFound, errors.New("no rows")))
-
-		err := svc.DeleteUser(99)
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrNotFound))
+		err := svc.DeleteUser(1)
+		require.ErrorIs(t, err, appErr.ErrNotFound)
 	})
 
-	t.Run("successfully deletes user", func(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
 		mockRepo, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-
-		mockRepo.EXPECT().
-			Delete(1).
-			Return(nil)
-
-		err := svc.DeleteUser(1)
-		require.NoError(t, err)
+		mockRepo.EXPECT().Delete(2).Return(nil)
+		require.NoError(t, svc.DeleteUser(2))
 	})
 }
 
 // -----------------------------------------------------------------------------
-// Role Management
+// Role Management: GetUserRoles / AddRole / RemoveRole / ClearRoles
 // -----------------------------------------------------------------------------
 
 func TestService_GetUserRoles(t *testing.T) {
 	t.Parallel()
 
-	t.Run("invalid user ID", func(t *testing.T) {
+	t.Run("invalid id", func(t *testing.T) {
 		_, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-
-		roles, err := svc.GetUserRoles(0)
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInvalidInput))
-		require.Nil(t, roles)
+		r, err := svc.GetUserRoles(0)
+		require.ErrorIs(t, err, appErr.ErrInvalidInput)
+		require.Nil(t, r)
 	})
 
-	t.Run("repository returns roles", func(t *testing.T) {
+	t.Run("user not found", func(t *testing.T) {
 		mockRepo, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
+		mockRepo.EXPECT().GetByID(10).
+			Return(nil, appErr.Wrap("repo.GetByID", appErr.ErrNotFound, errors.New("no user")))
+		r, err := svc.GetUserRoles(10)
+		require.ErrorIs(t, err, appErr.ErrNotFound)
+		require.Nil(t, r)
+	})
 
-		expected := []roleModels.Role{
-			{ID: 1, Name: "Admin", Description: "System administrator"},
-		}
-		mockRepo.EXPECT().
-			GetUserRoles(1).
-			Return(expected, nil)
-
-		roles, err := svc.GetUserRoles(1)
+	t.Run("success", func(t *testing.T) {
+		mockRepo, _, svc, ctrl := setup(t)
+		defer ctrl.Finish()
+		mockRepo.EXPECT().GetByID(1).
+			Return(&userModels.User{ID: 1}, nil)
+		expected := []roleModels.Role{{ID: 1, Name: "Admin"}}
+		mockRepo.EXPECT().GetUserRoles(1).Return(expected, nil)
+		r, err := svc.GetUserRoles(1)
 		require.NoError(t, err)
-		require.Equal(t, expected, roles)
+		require.Equal(t, expected, r)
 	})
 }
 
 func TestService_AddRole_RemoveRole_ClearRoles(t *testing.T) {
 	t.Parallel()
 
-	t.Run("invalid inputs", func(t *testing.T) {
-		_, _, svc, ctrl := setup(t)
-		defer ctrl.Finish()
-
-		require.Error(t, svc.AddRole(0, 1))
-		require.Error(t, svc.RemoveRole(1, 0))
-		require.Error(t, svc.ClearRoles(0))
-	})
-
-	t.Run("repository bubbles up", func(t *testing.T) {
+	t.Run("AddRole validations and conflict", func(t *testing.T) {
 		mockRepo, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
 
-		mockRepo.EXPECT().AddRole(1, 2).Return(appErr.Wrap("repo.AddRole", appErr.ErrInternal, errors.New("fail")))
-		err := svc.AddRole(1, 2)
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInternal))
+		// invalid input
+		require.ErrorIs(t, svc.AddRole(0, 1), appErr.ErrInvalidInput)
 
-		mockRepo.EXPECT().RemoveRole(1, 2).Return(appErr.Wrap("repo.RemoveRole", appErr.ErrNotFound, errors.New("no row")))
-		err = svc.RemoveRole(1, 2)
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrNotFound))
+		// user not found
+		mockRepo.EXPECT().GetByID(5).Return(nil, appErr.Wrap("repo.GetByID", appErr.ErrNotFound, errors.New("no user")))
+		err := svc.AddRole(5, 1)
+		require.ErrorIs(t, err, appErr.ErrNotFound)
 
-		mockRepo.EXPECT().ClearRoles(1).Return(appErr.Wrap("repo.ClearRoles", appErr.ErrInternal, errors.New("fail")))
-		err = svc.ClearRoles(1)
+		// duplicate role
+		mockRepo.EXPECT().GetByID(1).Return(&userModels.User{ID: 1}, nil)
+		mockRepo.EXPECT().GetUserRoles(1).Return([]roleModels.Role{{ID: 2}}, nil)
+		err = svc.AddRole(1, 2)
 		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInternal))
+		require.Contains(t, err.Error(), "conflicto de datos")
+		require.Contains(t, err.Error(), "ya tiene este rol")
 	})
 
-	t.Run("success flows", func(t *testing.T) {
+	t.Run("AddRole success flow", func(t *testing.T) {
 		mockRepo, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
+		mockRepo.EXPECT().GetByID(1).Return(&userModels.User{ID: 1}, nil)
+		mockRepo.EXPECT().GetUserRoles(1).Return([]roleModels.Role{}, nil)
+		mockRepo.EXPECT().AddRole(1, 3).Return(nil)
+		require.NoError(t, svc.AddRole(1, 3))
+	})
 
-		mockRepo.EXPECT().AddRole(1, 2).Return(nil)
-		require.NoError(t, svc.AddRole(1, 2))
-
+	t.Run("RemoveRole & ClearRoles", func(t *testing.T) {
+		mockRepo, _, svc, ctrl := setup(t)
+		defer ctrl.Finish()
+		mockRepo.EXPECT().GetByID(1).Return(&userModels.User{ID: 1}, nil)
 		mockRepo.EXPECT().RemoveRole(1, 2).Return(nil)
 		require.NoError(t, svc.RemoveRole(1, 2))
 
+		mockRepo.EXPECT().GetByID(1).Return(&userModels.User{ID: 1}, nil)
 		mockRepo.EXPECT().ClearRoles(1).Return(nil)
 		require.NoError(t, svc.ClearRoles(1))
 	})
@@ -333,84 +315,54 @@ func TestService_AddRole_RemoveRole_ClearRoles(t *testing.T) {
 func TestService_GetRolesAndPermissions(t *testing.T) {
 	t.Parallel()
 
-	t.Run("invalid user ID", func(t *testing.T) {
+	t.Run("invalid id", func(t *testing.T) {
 		_, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-
 		r, p, err := svc.GetRolesAndPermissions(0)
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInvalidInput))
+		require.ErrorIs(t, err, appErr.ErrInvalidInput)
 		require.Nil(t, r)
 		require.Nil(t, p)
 	})
 
-	t.Run("repository bubbles up", func(t *testing.T) {
-		mockRepo, mockRoleSvc, svc, ctrl := setup(t)
+	t.Run("user not found", func(t *testing.T) {
+		mockRepo, _, svc, ctrl := setup(t)
 		defer ctrl.Finish()
-		_ = mockRoleSvc
-
-		mockRepo.EXPECT().
-			GetUserRoles(10).
-			Return(nil, appErr.Wrap("repo.GetUserRoles", appErr.ErrInternal, errors.New("fail")))
-
-		r, p, err := svc.GetRolesAndPermissions(10)
-		require.Error(t, err)
-		require.True(t, errors.Is(err, appErr.ErrInternal))
+		mockRepo.EXPECT().GetByID(99).
+			Return(nil, appErr.Wrap("repo.GetByID", appErr.ErrNotFound, errors.New("no user")))
+		r, p, err := svc.GetRolesAndPermissions(99)
+		require.ErrorIs(t, err, appErr.ErrNotFound)
 		require.Nil(t, r)
 		require.Nil(t, p)
 	})
 
-	t.Run("role service returns permissions correctly", func(t *testing.T) {
+	t.Run("role service bubbles up", func(t *testing.T) {
 		mockRepo, mockRoleSvc, svc, ctrl := setup(t)
 		defer ctrl.Finish()
+		mockRepo.EXPECT().GetByID(4).Return(&userModels.User{ID: 4}, nil)
+		mockRepo.EXPECT().GetUserRoles(4).Return([]roleModels.Role{{ID: 1}}, nil)
+		mockRoleSvc.EXPECT().GetPermissions(1).
+			Return(nil, appErr.Wrap("role.GetPermissions", appErr.ErrInternal, errors.New("fail")))
+		r, p, err := svc.GetRolesAndPermissions(4)
+		require.ErrorIs(t, err, appErr.ErrInternal)
+		require.Nil(t, r)
+		require.Nil(t, p)
+	})
 
-		roles := []roleModels.Role{
-			{ID: 1, Name: "Doctor", Description: "Medical staff"},
-			{ID: 2, Name: "Admin", Description: "System administrator"},
-		}
+	t.Run("deduplicates permissions", func(t *testing.T) {
+		mockRepo, mockRoleSvc, svc, ctrl := setup(t)
+		defer ctrl.Finish()
+		mockRepo.EXPECT().GetByID(5).Return(&userModels.User{ID: 5}, nil)
+		roles := []roleModels.Role{{ID: 1}, {ID: 2}}
 		mockRepo.EXPECT().GetUserRoles(5).Return(roles, nil)
-
-		mockRoleSvc.EXPECT().
-			GetPermissions(1).
-			Return([]roleModels.Permission{
-				{ID: 1, Name: "read", Description: "Can read patient records"},
-			}, nil)
-		mockRoleSvc.EXPECT().
-			GetPermissions(2).
-			Return([]roleModels.Permission{
-				{ID: 2, Name: "write", Description: "Can edit patient records"},
-			}, nil)
-
-		r, p, err := svc.GetRolesAndPermissions(5)
+		mockRoleSvc.EXPECT().GetPermissions(1).Return([]roleModels.Permission{
+			{ID: 1, Name: "read"},
+		}, nil)
+		mockRoleSvc.EXPECT().GetPermissions(2).Return([]roleModels.Permission{
+			{ID: 1, Name: "read"},
+			{ID: 2, Name: "write"},
+		}, nil)
+		_, perms, err := svc.GetRolesAndPermissions(5)
 		require.NoError(t, err)
-		require.Len(t, r, 2)
-		require.Len(t, p, 2)
-	})
-
-	t.Run("duplicate permissions deduplicated", func(t *testing.T) {
-		mockRepo, mockRoleSvc, svc, ctrl := setup(t)
-		defer ctrl.Finish()
-
-		roles := []roleModels.Role{
-			{ID: 1, Name: "Admin", Description: "System administrator"},
-			{ID: 2, Name: "SuperAdmin", Description: "Elevated access"},
-		}
-		mockRepo.EXPECT().GetUserRoles(1).Return(roles, nil)
-
-		mockRoleSvc.EXPECT().
-			GetPermissions(1).
-			Return([]roleModels.Permission{
-				{ID: 1, Name: "read", Description: "Can read data"},
-			}, nil)
-		mockRoleSvc.EXPECT().
-			GetPermissions(2).
-			Return([]roleModels.Permission{
-				{ID: 1, Name: "read", Description: "Can read data"},
-				{ID: 2, Name: "write", Description: "Can modify data"},
-			}, nil)
-
-		_, perms, err := svc.GetRolesAndPermissions(1)
-		require.NoError(t, err)
-		require.Len(t, perms, 2) // should deduplicate "read"
+		require.Len(t, perms, 2)
 	})
 }

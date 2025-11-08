@@ -18,7 +18,7 @@ func ErrorMiddleware() echo.MiddlewareFunc {
 			}
 
 			status, msg := mapError(err)
-			c.Logger().Errorf("[Schedule] %v", err)
+			c.Logger().Errorf("[User] %v", err)
 			return c.JSON(status, echo.Map{"error": msg})
 		}
 	}
