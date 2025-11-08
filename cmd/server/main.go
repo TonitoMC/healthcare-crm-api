@@ -94,6 +94,7 @@ func main() {
 	// Questionnaire dependencies
 	questionnaireRepo := questionnaire.NewRepository(db)
 	questionnaireService := questionnaire.NewService(questionnaireRepo)
+	questionnaireHandler := questionnaire.NewHandler(questionnaireService)
 
 	questionnaireValidator := &adapters.QuestionnaireAdapter{Service: questionnaireService}
 
@@ -117,7 +118,7 @@ func main() {
 	appointmentHandler := appointment.NewHandler(appointmentService)
 	patientHandler := patient.NewHandler(patientService, examService, consultationService, recordService)
 	// ===== Route Registration =====
-	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler, roleHandler, patientHandler, consultationHandler, examHandler, appointmentHandler)
+	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler, roleHandler, patientHandler, consultationHandler, examHandler, appointmentHandler, questionnaireHandler)
 
 	// ===== Server Start =====
 	e.Logger.Fatal(e.Start(":8080"))
