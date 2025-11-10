@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -32,6 +33,20 @@ func main() {
 	// Connect to database
 	db := database.Connect(cfg.DatabaseURL)
 	defer db.Close()
+
+	s3Cfg := adapters.S3Config{
+		Bucket:         cfg.S3Bucket,
+		Region:         cfg.S3Region,
+		Endpoint:       cfg.S3Endpoint,
+		AccessKey:      cfg.S3AccessKey,
+		SecretKey:      cfg.S3SecretKey,
+		ForcePathStyle: cfg.S3ForcePathStyle,
+	}
+
+	s3Adapter, err := adapters.NewS3Adapter(s3Cfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize S3/MinIO adapter: %v", err)
+	}
 
 	// Initialize Echo instance
 	e := echo.New()
@@ -105,7 +120,7 @@ func main() {
 
 	// Exam dependencies
 	examRepo := exam.NewRepository(db)
-	examService := exam.NewService(examRepo, patientProvider)
+	examService := exam.NewService(examRepo, patientProvider, s3Adapter)
 	examHandler := exam.NewHandler(examService)
 
 	// Adapters para appointments

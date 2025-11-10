@@ -25,6 +25,14 @@ type Config struct {
 	SecretaryName     string
 	SecretaryEmail    string
 	SecretaryPassword string
+
+	// --- New S3 / MinIO ---
+	S3Bucket         string
+	S3Region         string
+	S3Endpoint       string
+	S3AccessKey      string
+	S3SecretKey      string
+	S3ForcePathStyle bool
 }
 
 // Load reads environment variables into a Config struct.
@@ -80,6 +88,27 @@ func Load() *Config {
 	// Not required — if empty, bootstrap will just skip
 	if cfg.SecretaryName == "" || cfg.SecretaryEmail == "" || cfg.SecretaryPassword == "" {
 		log.Println("⚠️ SECRETARY_* variables not set — skipping auto-creation")
+	}
+
+	// --- S3 / MinIO ---
+	cfg.S3Bucket = os.Getenv("S3_BUCKET")
+	cfg.S3Region = os.Getenv("S3_REGION")
+	cfg.S3Endpoint = os.Getenv("S3_ENDPOINT")
+	cfg.S3AccessKey = os.Getenv("S3_ACCESS_KEY")
+	cfg.S3SecretKey = os.Getenv("S3_SECRET_KEY")
+
+	if v := os.Getenv("S3_FORCE_PATH_STYLE"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			log.Printf("Invalid S3_FORCE_PATH_STYLE, defaulting to false")
+			cfg.S3ForcePathStyle = false
+		} else {
+			cfg.S3ForcePathStyle = b
+		}
+	}
+
+	if cfg.S3Bucket == "" {
+		log.Println("⚠️  S3_BUCKET not set — file uploads will be disabled")
 	}
 
 	return cfg

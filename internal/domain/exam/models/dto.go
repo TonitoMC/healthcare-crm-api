@@ -9,9 +9,7 @@ type ExamCreateDTO struct {
 }
 
 type ExamUploadDTO struct {
-	S3Key    string `json:"s3_key" validate:"required"`
-	FileSize int64  `json:"file_size" validate:"required"`
-	MimeType string `json:"mime_type" validate:"required"`
+	FileSize int64 `json:"file_size" validate:"required"`
 }
 
 type ExamDTO struct {

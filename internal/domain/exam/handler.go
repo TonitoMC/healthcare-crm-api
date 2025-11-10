@@ -28,6 +28,7 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	exams.POST("", h.Create, middleware.RequirePermission("manejar-examenes"))
 	exams.PATCH("/:id", h.Update, middleware.RequirePermission("manejar-examenes"))
 	exams.DELETE("/:id", h.Delete, middleware.RequirePermission("manejar-examenes"))
+	exams.POST("/:id/upload", h.UploadExam, middleware.RequirePermission("manejar-examenes"))
 }
 
 // ============================================================================
@@ -118,4 +119,34 @@ func (h *Handler) GetByPatientID(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, exams)
+}
+
+func (h *Handler) UploadExam(c echo.Context) error {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return appErr.Wrap("ExamHandler.UploadExam", appErr.ErrInvalidInput, err)
+	}
+
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		return appErr.Wrap("ExamHandler.UploadExam", appErr.ErrInvalidRequest, err)
+	}
+
+	src, err := fileHeader.Open()
+	if err != nil {
+		return appErr.Wrap("ExamHandler.UploadExam", appErr.ErrInvalidRequest, err)
+	}
+	defer src.Close()
+
+	// We don’t need to pass the MIME type anymore — backend enforces PDF-only.
+	dto := &models.ExamUploadDTO{
+		FileSize: fileHeader.Size,
+	}
+
+	updated, err := h.service.UploadExam(id, dto, src)
+	if err != nil {
+		return err // domain-wrapped errors
+	}
+
+	return c.JSON(http.StatusOK, updated)
 }

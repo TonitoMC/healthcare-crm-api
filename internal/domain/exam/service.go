@@ -1,11 +1,18 @@
 package exam
 
 import (
+	"fmt"
+	"mime/multipart"
 	"time"
 
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/exam/models"
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
+
+type FileStorage interface {
+	Upload(file multipart.File, key, contentType string) (string, error)
+	Delete(key string) error
+}
 
 type Service interface {
 	GetByID(id int) (*models.ExamDTO, error)
@@ -14,6 +21,7 @@ type Service interface {
 	Update(id int, dto *models.ExamDTO) error
 	Delete(id int) error
 	GetPending() ([]models.ExamDTO, error)
+	UploadExam(id int, dto *models.ExamUploadDTO, file multipart.File) (*models.ExamDTO, error)
 }
 
 type PatientProvider interface {
@@ -23,10 +31,11 @@ type PatientProvider interface {
 type service struct {
 	repo            Repository
 	patientProvider PatientProvider
+	storage         FileStorage
 }
 
-func NewService(repo Repository, patientProvider PatientProvider) Service {
-	return &service{repo: repo, patientProvider: patientProvider}
+func NewService(repo Repository, patientProvider PatientProvider, storage FileStorage) Service {
+	return &service{repo: repo, patientProvider: patientProvider, storage: storage}
 }
 
 func (s *service) GetByID(id int) (*models.ExamDTO, error) {
@@ -184,4 +193,44 @@ func (s *service) enrich(e models.Exam) (*models.ExamDTO, error) {
 	}
 
 	return dto, nil
+}
+
+func (s *service) UploadExam(id int, dto *models.ExamUploadDTO, file multipart.File) (*models.ExamDTO, error) {
+	if id <= 0 {
+		return nil, appErr.Wrap("ExamService.UploadExam", appErr.ErrInvalidInput, nil)
+	}
+	if dto == nil {
+		return nil, appErr.Wrap("ExamService.UploadExam", appErr.ErrInvalidInput, nil)
+	}
+
+	exam, err := s.repo.GetByID(id)
+	if err != nil {
+		return nil, err // bubble up repo error
+	}
+
+	if s.storage == nil {
+		return nil, appErr.NewDomainError(appErr.ErrInternal, "El almacenamiento no está configurado correctamente.")
+	}
+
+	// Always enforce PDF-only uploads
+	mimeType := "application/pdf"
+
+	// Generate deterministic key
+	filename := fmt.Sprintf("exams/%d_%d.pdf", exam.ID, time.Now().UnixNano())
+
+	// Upload file (PDF only)
+	if _, err := s.storage.Upload(file, filename, mimeType); err != nil {
+		return nil, appErr.Wrap("ExamService.UploadExam", appErr.ErrInternal, err)
+	}
+
+	// Update exam metadata
+	exam.S3Key = &filename
+	exam.FileSize = &dto.FileSize
+	exam.MimeType = &mimeType
+
+	if err := s.repo.Update(exam); err != nil {
+		return nil, appErr.Wrap("ExamService.UploadExam", appErr.ErrInternal, err)
+	}
+
+	return s.enrich(*exam)
 }
