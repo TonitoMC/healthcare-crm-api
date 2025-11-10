@@ -154,12 +154,16 @@ func (h *Handler) GetDetails(c echo.Context) error {
 	if includes["consultations"] && h.consultationService != nil {
 		if consultations, err := h.consultationService.GetByPatientWithDetails(id); err == nil {
 			response["consultations"] = consultations
+		} else {
+			return err
 		}
 	}
 
 	if includes["record"] && h.recordService != nil {
 		if record, err := h.recordService.GetByPatientID(id); err == nil {
 			response["medical_record"] = record
+		} else {
+			return err
 		}
 	}
 
