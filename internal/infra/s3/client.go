@@ -3,6 +3,7 @@ package s3
 import (
 	"context"
 	"fmt"
+	"io"
 	"mime/multipart"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -82,4 +83,15 @@ func (c *Client) GetPublicURL(endpoint string, key string) string {
 	}
 	// Default AWS-style public URL
 	return fmt.Sprintf("https://%s.s3.amazonaws.com/%s", c.bucket, key)
+}
+
+func (c *Client) Download(key string) (io.ReadCloser, error) {
+	out, err := c.s3.GetObject(context.TODO(), &s3.GetObjectInput{
+		Bucket: aws.String(c.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to download file: %w", err)
+	}
+	return out.Body, nil
 }

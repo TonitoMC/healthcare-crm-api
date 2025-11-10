@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"io"
 	"mime/multipart"
 
 	infra "github.com/tonitomc/healthcare-crm-api/internal/infra/s3"
@@ -54,4 +55,9 @@ func (a *S3Adapter) Upload(file multipart.File, key, contentType string) (string
 // Delete removes a file from the bucket.
 func (a *S3Adapter) Delete(key string) error {
 	return a.client.Delete(key)
+}
+
+// Download retrieves a file as a stream.
+func (a *S3Adapter) Download(key string) (io.ReadCloser, error) {
+	return a.client.Download(key)
 }

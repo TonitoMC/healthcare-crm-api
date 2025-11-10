@@ -29,6 +29,8 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	exams.PATCH("/:id", h.Update, middleware.RequirePermission("manejar-examenes"))
 	exams.DELETE("/:id", h.Delete, middleware.RequirePermission("manejar-examenes"))
 	exams.POST("/:id/upload", h.UploadExam, middleware.RequirePermission("manejar-examenes"))
+
+	exams.GET("/:id/file", h.DownloadExam, middleware.RequirePermission("ver-examenes"))
 }
 
 // ============================================================================
@@ -149,4 +151,28 @@ func (h *Handler) UploadExam(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, updated)
+}
+
+func (h *Handler) DownloadExam(c echo.Context) error {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		return appErr.Wrap("ExamHandler.DownloadExam", appErr.ErrInvalidInput, err)
+	}
+
+	exam, err := h.service.GetByID(id)
+	if err != nil {
+		return err
+	}
+
+	if exam.S3Key == nil {
+		return appErr.NewDomainError(appErr.ErrNotFound, "El examen no tiene archivo asociado.")
+	}
+
+	reader, err := h.service.DownloadExamFile(*exam.S3Key)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	return c.Stream(http.StatusOK, "application/pdf", reader)
 }

@@ -2,6 +2,7 @@ package exam
 
 import (
 	"fmt"
+	"io"
 	"mime/multipart"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 type FileStorage interface {
 	Upload(file multipart.File, key, contentType string) (string, error)
 	Delete(key string) error
+	Download(key string) (io.ReadCloser, error)
 }
 
 type Service interface {
@@ -22,6 +24,8 @@ type Service interface {
 	Delete(id int) error
 	GetPending() ([]models.ExamDTO, error)
 	UploadExam(id int, dto *models.ExamUploadDTO, file multipart.File) (*models.ExamDTO, error)
+
+	DownloadExamFile(key string) (io.ReadCloser, error)
 }
 
 type PatientProvider interface {
@@ -233,4 +237,21 @@ func (s *service) UploadExam(id int, dto *models.ExamUploadDTO, file multipart.F
 	}
 
 	return s.enrich(*exam)
+}
+
+func (s *service) DownloadExamFile(key string) (io.ReadCloser, error) {
+	if key == "" {
+		return nil, appErr.NewDomainError(appErr.ErrInvalidInput, "Clave de archivo vacía o inválida.")
+	}
+
+	if s.storage == nil {
+		return nil, appErr.NewDomainError(appErr.ErrInternal, "El almacenamiento no está configurado correctamente.")
+	}
+
+	reader, err := s.storage.Download(key)
+	if err != nil {
+		return nil, appErr.Wrap("ExamService.DownloadExamFile", appErr.ErrInternal, err)
+	}
+
+	return reader, nil
 }
