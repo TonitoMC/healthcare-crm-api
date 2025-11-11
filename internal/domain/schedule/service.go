@@ -8,6 +8,7 @@ import (
 
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/schedule/models"
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
+	"github.com/tonitomc/healthcare-crm-api/pkg/timeutil"
 )
 
 // Service Interface
@@ -212,14 +213,14 @@ func (s *service) IsTimeRangeWithinWorkingHours(date, start, end time.Time) (boo
 	}
 
 	// Extract time-of-day from the appointment times (in local timezone)
-	startTimeOfDay := start.Hour()*60 + start.Minute()
-	endTimeOfDay := end.Hour()*60 + end.Minute()
+	startTimeOfDay := timeutil.TimeOfDayMinutes(start.In(timeutil.ClinicLocation()))
+	endTimeOfDay := timeutil.TimeOfDayMinutes(end.In(timeutil.ClinicLocation()))
 
 	// Check if the appointment falls within any working range
 	for _, r := range eff.Ranges {
-		// Extract time-of-day from working hours (they're stored as UTC but represent local time)
-		rangeStartMinutes := r.Start.Hour()*60 + r.Start.Minute()
-		rangeEndMinutes := r.End.Hour()*60 + r.End.Minute()
+		// Las franjas ya están ancladas con timezone de clínica
+		rangeStartMinutes := timeutil.TimeOfDayMinutes(r.Start)
+		rangeEndMinutes := timeutil.TimeOfDayMinutes(r.End)
 
 		// Check if appointment fits within this range
 		if startTimeOfDay >= rangeStartMinutes && endTimeOfDay <= rangeEndMinutes {

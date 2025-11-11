@@ -33,6 +33,9 @@ type Config struct {
 	S3AccessKey      string
 	S3SecretKey      string
 	S3ForcePathStyle bool
+
+	// Timezone Config
+	ClinicTimezone string // IANA tz name, e.g., America/Guatemala
 }
 
 // Load reads environment variables into a Config struct.
@@ -109,6 +112,13 @@ func Load() *Config {
 
 	if cfg.S3Bucket == "" {
 		log.Println("⚠️  S3_BUCKET not set — file uploads will be disabled")
+	}
+
+	// Clinic timezone (optional, default America/Guatemala)
+	cfg.ClinicTimezone = os.Getenv("CLINIC_TZ")
+	if cfg.ClinicTimezone == "" {
+		cfg.ClinicTimezone = "America/Guatemala"
+		log.Println("ℹ️ CLINIC_TZ not set — defaulting to America/Guatemala")
 	}
 
 	return cfg

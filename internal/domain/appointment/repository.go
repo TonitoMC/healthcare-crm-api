@@ -9,6 +9,7 @@ import (
 	"github.com/tonitomc/healthcare-crm-api/internal/database"
 	"github.com/tonitomc/healthcare-crm-api/internal/domain/appointment/models"
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
+	"github.com/tonitomc/healthcare-crm-api/pkg/timeutil"
 )
 
 type Repository interface {
@@ -44,6 +45,8 @@ func (r *repository) GetByID(id int) (*models.Appointment, error) {
 	if err != nil {
 		return nil, database.MapSQLError(err, "AppointmentRepository.GetByID")
 	}
+	// Normalizar a zona de la clínica para respuestas JSON consistentes
+	a.Fecha = timeutil.NormalizeToClinic(a.Fecha)
 	return &a, nil
 }
 
@@ -80,6 +83,8 @@ func (r *repository) GetBetween(start, end time.Time) ([]models.Appointment, err
 		); err != nil {
 			return nil, appErr.Wrap("AppointmentRepository.GetBetween(scan)", appErr.ErrInternal, err)
 		}
+		// Normalizar a zona de la clínica para respuestas JSON consistentes
+		a.Fecha = timeutil.NormalizeToClinic(a.Fecha)
 		appointments = append(appointments, a)
 	}
 	return appointments, nil

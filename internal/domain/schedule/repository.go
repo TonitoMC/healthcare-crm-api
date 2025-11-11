@@ -9,6 +9,7 @@ import (
 	dbErr "github.com/tonitomc/healthcare-crm-api/internal/database"
 	models "github.com/tonitomc/healthcare-crm-api/internal/domain/schedule/models"
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
+	"github.com/tonitomc/healthcare-crm-api/pkg/timeutil"
 )
 
 // Repository defines the data access contract for working hours and special days.
@@ -76,9 +77,13 @@ func (r *repository) GetAllWorkingHours() ([]models.WorkDay, error) {
 			start, err1 := time.Parse("15:04:05", openStr.String)
 			end, err2 := time.Parse("15:04:05", closeStr.String)
 			if err1 == nil && err2 == nil {
+				loc := timeutil.ClinicLocation()
+				// Re-anclar a una fecha fija pero con timezone de clínica (solo hora interesa)
+				anchoredStart := time.Date(2000, 1, 1, start.Hour(), start.Minute(), start.Second(), 0, loc)
+				anchoredEnd := time.Date(2000, 1, 1, end.Hour(), end.Minute(), end.Second(), 0, loc)
 				wd.Ranges = []models.TimeRange{{
-					Start: start,
-					End:   end,
+					Start: anchoredStart,
+					End:   anchoredEnd,
 				}}
 			}
 		}
@@ -180,9 +185,12 @@ func (r *repository) GetAllSpecialHours() ([]models.SpecialDay, error) {
 			start, err1 := time.Parse("15:04:05", openStr.String)
 			end, err2 := time.Parse("15:04:05", closeStr.String)
 			if err1 == nil && err2 == nil {
+				loc := timeutil.ClinicLocation()
+				anchoredStart := time.Date(2000, 1, 1, start.Hour(), start.Minute(), start.Second(), 0, loc)
+				anchoredEnd := time.Date(2000, 1, 1, end.Hour(), end.Minute(), end.Second(), 0, loc)
 				sd.Ranges = []models.TimeRange{{
-					Start: start,
-					End:   end,
+					Start: anchoredStart,
+					End:   anchoredEnd,
 				}}
 			}
 		}
@@ -279,8 +287,11 @@ func (r *repository) GetSpecialHoursByDate(date time.Time) ([]models.SpecialDay,
 			if err != nil {
 				return nil, appErr.Wrap("ScheduleRepo.GetSpecialHoursByDate(parse close)", appErr.ErrInternal, err)
 			}
+			loc := timeutil.ClinicLocation()
+			anchoredStart := time.Date(2000, 1, 1, openT.Hour(), openT.Minute(), openT.Second(), 0, loc)
+			anchoredEnd := time.Date(2000, 1, 1, closeT.Hour(), closeT.Minute(), closeT.Second(), 0, loc)
 			sd.Ranges = []models.TimeRange{
-				{Start: openT, End: closeT},
+				{Start: anchoredStart, End: anchoredEnd},
 			}
 		}
 

@@ -10,6 +10,34 @@ import (
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
 
+// normalizePermission converts permission strings to a canonical comparable form
+// e.g. "gestion_citas" => "gestion-citas"
+func normalizePermission(p string) string {
+	p = strings.TrimSpace(p)
+	p = strings.ToLower(p)
+	p = strings.ReplaceAll(p, "_", "-")
+	return p
+}
+
+// hasPermission checks if the token permissions satisfy the required permission,
+// supporting legacy aliases (e.g., gestion-citas, manejar-citas imply all citas actions).
+func hasPermission(perms []string, required string) bool {
+	req := normalizePermission(required)
+	for _, raw := range perms {
+		p := normalizePermission(raw)
+		if p == req {
+			return true
+		}
+		// Legacy/group aliases for appointments domain
+		if strings.HasSuffix(req, "-citas") {
+			if p == "gestion-citas" || p == "manejar-citas" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func RequirePermission(required string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -29,10 +57,8 @@ func RequirePermission(required string) echo.MiddlewareFunc {
 				})
 			}
 
-			for _, p := range claims.Permissions {
-				if strings.EqualFold(p, required) {
-					return next(c)
-				}
+			if hasPermission(claims.Permissions, required) {
+				return next(c)
 			}
 
 			c.Logger().Errorf("[RequirePermission] Permission '%s' denied. Token claims: %+v", required, claims)
