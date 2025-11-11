@@ -207,13 +207,22 @@ func (s *service) IsTimeRangeWithinWorkingHours(date, start, end time.Time) (boo
 	if err != nil {
 		return false, err
 	}
-
 	if !eff.Active {
 		return false, appErr.NewDomainError(appErr.ErrConflict, "El día está cerrado.")
 	}
 
+	// Extract time-of-day from the appointment times (in local timezone)
+	startTimeOfDay := start.Hour()*60 + start.Minute()
+	endTimeOfDay := end.Hour()*60 + end.Minute()
+
+	// Check if the appointment falls within any working range
 	for _, r := range eff.Ranges {
-		if !start.Before(r.Start) && !end.After(r.End) {
+		// Extract time-of-day from working hours (they're stored as UTC but represent local time)
+		rangeStartMinutes := r.Start.Hour()*60 + r.Start.Minute()
+		rangeEndMinutes := r.End.Hour()*60 + r.End.Minute()
+
+		// Check if appointment fits within this range
+		if startTimeOfDay >= rangeStartMinutes && endTimeOfDay <= rangeEndMinutes {
 			return true, nil
 		}
 	}

@@ -24,20 +24,20 @@ func (h *Handler) RegisterRoutes(e *echo.Group) {
 	appointments.GET("/today", h.GetToday, middleware.RequirePermission("ver-citas"))
 	appointments.GET("/date/:date", h.GetByDate, middleware.RequirePermission("ver-citas"))
 	appointments.GET("/available-slots/:date", h.GetAvailableSlots, middleware.RequirePermission("ver-citas"))
-	appointments.POST("", h.Create, middleware.RequirePermission("crear-citas"))
-	appointments.POST("/with-new-patient", h.CreateWithNewPatient, middleware.RequirePermission("crear-citas"))
-	appointments.PUT("/:id", h.Update, middleware.RequirePermission("editar-citas"))
-	appointments.DELETE("/:id", h.Delete, middleware.RequirePermission("eliminar-citas"))
+	appointments.POST("", h.Create, middleware.RequirePermission("manejar-citas"))
+	appointments.POST("/with-new-patient", h.CreateWithNewPatient, middleware.RequirePermission("manejar-citas"))
+	appointments.PUT("/:id", h.Update, middleware.RequirePermission("manejar-citas"))
+	appointments.DELETE("/:id", h.Delete, middleware.RequirePermission("manejar-citas"))
 }
 
 func (h *Handler) GetByID(c echo.Context) error {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid ID"})
+		return err
 	}
 	appt, err := h.service.GetByID(id)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return err
 	}
 	return c.JSON(http.StatusOK, appt)
 }
@@ -45,7 +45,7 @@ func (h *Handler) GetByID(c echo.Context) error {
 func (h *Handler) GetToday(c echo.Context) error {
 	appts, err := h.service.GetToday()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return err
 	}
 	return c.JSON(http.StatusOK, appts)
 }
@@ -58,7 +58,7 @@ func (h *Handler) GetByDate(c echo.Context) error {
 	}
 	appts, err := h.service.GetByDate(date)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return err
 	}
 	return c.JSON(http.StatusOK, appts)
 }
@@ -70,7 +70,7 @@ func (h *Handler) Create(c echo.Context) error {
 	}
 	id, err := h.service.Create(&req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return err
 	}
 	return c.JSON(http.StatusCreated, echo.Map{"id": id})
 }
@@ -85,7 +85,7 @@ func (h *Handler) Update(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid request body"})
 	}
 	if err := h.service.Update(id, &req); err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return err
 	}
 	return c.JSON(http.StatusOK, echo.Map{"message": "Appointment updated successfully"})
 }
@@ -96,7 +96,7 @@ func (h *Handler) Delete(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid ID"})
 	}
 	if err := h.service.Delete(id); err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return err
 	}
 	return c.JSON(http.StatusOK, echo.Map{"message": "Appointment deleted successfully"})
 }
@@ -108,7 +108,7 @@ func (h *Handler) CreateWithNewPatient(c echo.Context) error {
 	}
 	id, err := h.service.CreateWithNewPatient(&req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+		return err
 	}
 	return c.JSON(http.StatusCreated, echo.Map{"id": id})
 }
