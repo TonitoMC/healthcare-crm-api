@@ -112,7 +112,7 @@ func (s *service) Create(appt *models.AppointmentCreateDTO) (int, error) {
 		exEnd := ex.Fecha.Add(time.Duration(ex.Duracion) * time.Second)
 		exEndWithGap := exEnd.Add(time.Duration(gapMinutes) * time.Minute)
 		if appt.Fecha.Before(exEndWithGap) && endTimeWithGap.After(ex.Fecha) {
-			return 0, appErr.Wrap("AppointmentService.Create(time slot conflict)", appErr.ErrConflict, nil)
+			return 0, appErr.NewDomainError(appErr.ErrConflict, "El horario solicitado traslapa con otras citas")
 		}
 	}
 

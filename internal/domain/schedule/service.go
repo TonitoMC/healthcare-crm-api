@@ -228,7 +228,7 @@ func (s *service) IsTimeRangeWithinWorkingHours(date, start, end time.Time) (boo
 		}
 	}
 
-	return false, appErr.NewDomainError(appErr.ErrConflict, "El horario solicitado está fuera del rango permitido.")
+	return false, appErr.NewDomainError(appErr.ErrConflict, "El horario solicitado está fuera del horario laboral.")
 }
 
 // ============================================================================

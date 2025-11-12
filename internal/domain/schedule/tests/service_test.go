@@ -186,7 +186,7 @@ func TestIsTimeRangeWithinWorkingHours_OutOfRange(t *testing.T) {
 	ok, err := service.IsTimeRangeWithinWorkingHours(date, start, end)
 	assert.False(t, ok)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "fuera del rango permitido")
+	assert.Contains(t, err.Error(), "fuera del horario laboral")
 }
 
 func TestUpdateWorkDay_InvalidRange(t *testing.T) {
