@@ -227,7 +227,7 @@ func (s *service) Update(id int, appt *models.AppointmentUpdateDTO) error {
 			return appErr.Wrap("AppointmentService.Update(time outside working hours)", appErr.ErrInvalidInput, nil)
 		}
 
-		const gapMinutes = 5
+		const gapMinutes = 0
 		dayStart := timeutil.StartOfClinicDay(newFecha)
 		dayEnd := dayStart.Add(24 * time.Hour)
 		existing, err := s.repo.GetBetween(dayStart, dayEnd)
