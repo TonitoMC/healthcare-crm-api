@@ -78,69 +78,57 @@ func (s *service) Create(appt *models.AppointmentCreateDTO) (int, error) {
 		return 0, appErr.Wrap("AppointmentService.Create(duracion must be > 0)", appErr.ErrInvalidInput, nil)
 	}
 
-	// Normalizar siempre a la zona horaria de la clínica
 	appt.Fecha = timeutil.NormalizeToClinic(appt.Fecha)
 
-	// Validar que el paciente existe si se proporciona ID
 	if appt.PacienteID != nil {
 		exists, err := s.patientProvider.Exists(*appt.PacienteID)
 		if err != nil {
-			return 0, appErr.Wrap("AppointmentService.Create(check patient)", appErr.ErrInternal, err)
+			return 0, err
 		}
 		if !exists {
 			return 0, appErr.Wrap("AppointmentService.Create(patient not found)", appErr.ErrNotFound, nil)
 		}
 	}
 
-	// Validar horario laboral
 	endTime := appt.Fecha.Add(time.Duration(appt.Duracion) * time.Second)
 	withinHours, err := s.scheduleValidator.IsWithinBusinessHours(appt.Fecha, appt.Fecha, endTime)
 	if err != nil {
-		return 0, appErr.Wrap("AppointmentService.Create(validate schedule)", appErr.ErrInternal, err)
+		return 0, err
 	}
 	if !withinHours {
 		return 0, appErr.Wrap("AppointmentService.Create(time outside working hours)", appErr.ErrInvalidInput, nil)
 	}
 
-	// Verificar solapamiento con citas existentes (con gap de 5 minutos)
-	const gapMinutes = 5
+	const gapMinutes = 0
 	dayStart := timeutil.StartOfClinicDay(appt.Fecha)
 	dayEnd := dayStart.Add(24 * time.Hour)
 	existing, err := s.repo.GetBetween(dayStart, dayEnd)
 	if err != nil {
-		return 0, appErr.Wrap("AppointmentService.Create(check conflicts)", appErr.ErrInternal, err)
+		return 0, err
 	}
 
-	// Agregar gap de 5 minutos al final de la cita
 	endTimeWithGap := endTime.Add(time.Duration(gapMinutes) * time.Minute)
-
 	for _, ex := range existing {
 		exEnd := ex.Fecha.Add(time.Duration(ex.Duracion) * time.Second)
 		exEndWithGap := exEnd.Add(time.Duration(gapMinutes) * time.Minute)
-
-		// Verificar conflicto incluyendo el gap
 		if appt.Fecha.Before(exEndWithGap) && endTimeWithGap.After(ex.Fecha) {
-			return 0, appErr.Wrap("AppointmentService.Create(time slot conflict - appointments must have 5 minute gap)", appErr.ErrConflict, nil)
+			return 0, appErr.Wrap("AppointmentService.Create(time slot conflict)", appErr.ErrConflict, nil)
 		}
 	}
 
 	return s.repo.Create(appt)
 }
 
-// CreateWithNewPatient crea un paciente y su cita en una operación transaccional
 func (s *service) CreateWithNewPatient(dto *models.AppointmentWithNewPatientDTO) (int, error) {
-	// Validaciones básicas
 	if dto.AppointmentData.Duracion <= 0 {
 		return 0, appErr.Wrap("AppointmentService.CreateWithNewPatient(duracion must be > 0)", appErr.ErrInvalidInput, nil)
 	}
 
-	// 1. Crear el paciente primero
 	patientID, err := s.patientProvider.Create(&dto.PatientData)
 	if err != nil {
-		return 0, appErr.Wrap("AppointmentService.CreateWithNewPatient(failed to create patient)", appErr.ErrInternal, err)
+		return 0, err
 	}
 
-	// 2. Crear la cita con el ID del paciente recién creado
 	appointmentDTO := &models.AppointmentCreateDTO{
 		PacienteID: &patientID,
 		Fecha:      dto.AppointmentData.Fecha,
@@ -149,9 +137,7 @@ func (s *service) CreateWithNewPatient(dto *models.AppointmentWithNewPatientDTO)
 
 	appointmentID, err := s.Create(appointmentDTO)
 	if err != nil {
-		// Si falla la cita, el paciente ya fue creado - esto es una limitación
-		// En producción se usaría una transacción de base de datos
-		return 0, appErr.Wrap("AppointmentService.CreateWithNewPatient(failed to create appointment)", appErr.ErrInternal, err)
+		return 0, err
 	}
 
 	return appointmentID, nil
@@ -162,24 +148,21 @@ func (s *service) GetAvailableSlots(date time.Time, slotDuration int64) ([]model
 		slotDuration = 900 // 15 min default
 	}
 
-	// Verificar si el día está abierto
 	isOpen, err := s.scheduleValidator.GetEffectiveDay(date)
 	if err != nil {
-		return nil, appErr.Wrap("AppointmentService.GetAvailableSlots(get schedule)", appErr.ErrInternal, err)
+		return nil, err
 	}
 	if !isOpen {
-		return []models.AvailabilitySlot{}, nil // Día cerrado
+		return []models.AvailabilitySlot{}, nil
 	}
 
-	// Obtener citas existentes del día
 	dayStart := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
 	dayEnd := dayStart.Add(24 * time.Hour)
 	appointments, err := s.repo.GetBetween(dayStart, dayEnd)
 	if err != nil {
-		return nil, appErr.Wrap("AppointmentService.GetAvailableSlots(get appointments)", appErr.ErrInternal, err)
+		return nil, err
 	}
 
-	// Generar slots de 8:00 a 18:00 (horario típico)
 	var slots []models.AvailabilitySlot
 	startTime := time.Date(date.Year(), date.Month(), date.Day(), 8, 0, 0, 0, date.Location())
 	endTime := time.Date(date.Year(), date.Month(), date.Day(), 18, 0, 0, 0, date.Location())
@@ -191,7 +174,6 @@ func (s *service) GetAvailableSlots(date time.Time, slotDuration int64) ([]model
 			break
 		}
 
-		// Verificar si hay conflicto con citas existentes
 		available := true
 		for _, appt := range appointments {
 			apptEnd := appt.Fecha.Add(time.Duration(appt.Duracion) * time.Second)
@@ -221,15 +203,12 @@ func (s *service) Update(id int, appt *models.AppointmentUpdateDTO) error {
 		return appErr.Wrap("AppointmentService.Update(duracion must be > 0)", appErr.ErrInvalidInput, nil)
 	}
 
-	// Si se está actualizando fecha o duración, validar conflictos
 	if appt.Fecha != nil || appt.Duracion != nil {
-		// Obtener la cita actual para tener todos los datos
 		current, err := s.repo.GetByID(id)
 		if err != nil {
-			return appErr.Wrap("AppointmentService.Update(get current)", appErr.ErrInternal, err)
+			return err
 		}
 
-		// Usar los valores actualizados o los existentes
 		newFecha := current.Fecha
 		if appt.Fecha != nil {
 			newFecha = timeutil.NormalizeToClinic(*appt.Fecha)
@@ -239,44 +218,35 @@ func (s *service) Update(id int, appt *models.AppointmentUpdateDTO) error {
 			newDuracion = *appt.Duracion
 		}
 
-		// Validar horario laboral
 		endTime := newFecha.Add(time.Duration(newDuracion) * time.Second)
 		withinHours, err := s.scheduleValidator.IsWithinBusinessHours(newFecha, newFecha, endTime)
 		if err != nil {
-			return appErr.Wrap("AppointmentService.Update(validate schedule)", appErr.ErrInternal, err)
+			return err
 		}
 		if !withinHours {
 			return appErr.Wrap("AppointmentService.Update(time outside working hours)", appErr.ErrInvalidInput, nil)
 		}
 
-		// Verificar solapamiento con citas existentes (excluyendo la cita actual, con gap de 5 minutos)
 		const gapMinutes = 5
 		dayStart := timeutil.StartOfClinicDay(newFecha)
 		dayEnd := dayStart.Add(24 * time.Hour)
 		existing, err := s.repo.GetBetween(dayStart, dayEnd)
 		if err != nil {
-			return appErr.Wrap("AppointmentService.Update(check conflicts)", appErr.ErrInternal, err)
+			return err
 		}
 
-		// Agregar gap de 5 minutos al final de la cita
 		endTimeWithGap := endTime.Add(time.Duration(gapMinutes) * time.Minute)
-
 		for _, ex := range existing {
-			// Saltar la cita que estamos actualizando
 			if ex.ID == id {
 				continue
 			}
-
 			exEnd := ex.Fecha.Add(time.Duration(ex.Duracion) * time.Second)
 			exEndWithGap := exEnd.Add(time.Duration(gapMinutes) * time.Minute)
-
-			// Verificar conflicto incluyendo el gap
 			if newFecha.Before(exEndWithGap) && endTimeWithGap.After(ex.Fecha) {
-				return appErr.Wrap("AppointmentService.Update(time slot conflict - appointments must have 5 minute gap)", appErr.ErrConflict, nil)
+				return appErr.Wrap("AppointmentService.Update(time slot conflict)", appErr.ErrConflict, nil)
 			}
 		}
 
-		// Normalizar fecha si se actualizó
 		if appt.Fecha != nil {
 			*appt.Fecha = newFecha
 		}
