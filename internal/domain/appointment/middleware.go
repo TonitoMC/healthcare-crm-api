@@ -34,7 +34,7 @@ func mapError(err error) (int, string) {
 		return http.StatusBadRequest, "Datos inválidos o incompletos."
 
 	case errors.Is(err, appErr.ErrNotFound):
-		return http.StatusNotFound, "Consulta no encontrada."
+		return http.StatusNotFound, "Cita no encontrada."
 
 	case errors.Is(err, appErr.ErrConflict):
 		return http.StatusConflict, "Conflicto de datos."
