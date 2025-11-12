@@ -96,6 +96,8 @@ func (s *service) GetByPatientWithDetails(patientID int) ([]models.ConsultationW
 		result = append(result, models.ConsultationWithDetails{
 			ID:          c.ID,
 			PacienteID:  c.PacienteID,
+			Motivo:      c.Motivo,
+			Fecha:       c.Fecha.Format("02-01-2006"),
 			Completada:  c.Completada,
 			Diagnostics: diagDetails,
 		})
