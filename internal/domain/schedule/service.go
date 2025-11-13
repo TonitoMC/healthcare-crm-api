@@ -119,7 +119,6 @@ func (s *service) GetSpecialHoursBetween(start, end time.Time) ([]models.Special
 }
 
 // GetEffectiveDay merges recurring + special schedules for a specific date.
-
 func (s *service) GetEffectiveDay(date time.Time) (*models.EffectiveDay, error) {
 	// --- 1. Check for special day overrides ---
 	specials, err := s.repo.GetSpecialHoursByDate(date)
@@ -157,7 +156,7 @@ func (s *service) GetEffectiveDay(date time.Time) (*models.EffectiveDay, error) 
 		weekday = 7
 	}
 
-	raw, err := s.repo.GetAllWorkingHours()
+	raw, err := s.repo.GetWorkingHoursForDate(date)
 	if err != nil {
 		return nil, err
 	}

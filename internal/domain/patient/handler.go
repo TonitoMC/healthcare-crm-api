@@ -144,7 +144,9 @@ func (h *Handler) GetDetails(c echo.Context) error {
 	// Base response
 	response := echo.Map{"patient": patient}
 
-	// Add related data conditionally
+	// Add related data conditionally,
+	// here we'll ignore errors, since we don't really care about a 'not found'
+
 	if includes["exams"] && h.examService != nil {
 		if exams, err := h.examService.GetByPatient(id); err == nil {
 			response["exams"] = exams
@@ -154,16 +156,12 @@ func (h *Handler) GetDetails(c echo.Context) error {
 	if includes["consultations"] && h.consultationService != nil {
 		if consultations, err := h.consultationService.GetByPatientWithDetails(id); err == nil {
 			response["consultations"] = consultations
-		} else {
-			return err
 		}
 	}
 
 	if includes["record"] && h.recordService != nil {
 		if record, err := h.recordService.GetByPatientID(id); err == nil {
 			response["medical_record"] = record
-		} else {
-			return err
 		}
 	}
 

@@ -19,6 +19,7 @@ type Repository interface {
 	GetAllSpecialHours() ([]models.SpecialDay, error)
 	GetSpecialHoursBetween(start, end time.Time) ([]models.SpecialDay, error)
 	GetSpecialHoursByDate(date time.Time) ([]models.SpecialDay, error)
+	GetWorkingHoursForDate(date time.Time) ([]models.WorkDay, error)
 
 	// Writes
 	UpdateWorkingHour(day models.WorkDay) error
@@ -47,6 +48,8 @@ func (r *repository) GetAllWorkingHours() ([]models.WorkDay, error) {
 	rows, err := r.db.Query(`
 		SELECT id, dia_semana, hora_apertura, hora_cierre, abierto
 		FROM horarios_laborales
+    WHERE valid_from <= NOW()
+      AND valid_to   >  NOW()
 		ORDER BY dia_semana, hora_apertura;
 	`)
 	if err != nil {
@@ -105,42 +108,67 @@ func (r *repository) UpdateWorkingHour(day models.WorkDay) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// Delete all existing entries for this weekday
-	if _, err := tx.Exec(`DELETE FROM horarios_laborales WHERE dia_semana = $1;`, day.DayOfWeek); err != nil {
-		return dbErr.MapSQLError(err, "ScheduleRepo.UpdateWorkingHour(delete)")
+	// Use clinic timezone for consistency
+	now := time.Now().In(timeutil.ClinicLocation())
+
+	// 1️⃣ Close all *currently active* rows for this weekday
+	//    (they are valid for "now" before this change)
+	if _, err := tx.Exec(`
+		UPDATE horarios_laborales
+		SET valid_to = $1
+		WHERE dia_semana = $2
+		  AND valid_from <= $1
+		  AND valid_to   >  $1;
+	`, now, day.DayOfWeek); err != nil {
+		return dbErr.MapSQLError(err, "ScheduleRepo.UpdateWorkingHour(close previous)")
 	}
 
-	// If active and has ranges → insert each one
+	// 2️⃣ Insert new version rows for this weekday starting now
 	if day.Active && len(day.Ranges) > 0 {
 		stmt, err := tx.Prepare(`
-			INSERT INTO horarios_laborales (dia_semana, hora_apertura, hora_cierre, abierto)
-			VALUES ($1, $2, $3, TRUE);
+			INSERT INTO horarios_laborales (
+				dia_semana,
+				hora_apertura,
+				hora_cierre,
+				abierto,
+				valid_from,
+				valid_to
+			)
+			VALUES ($1, $2, $3, TRUE, $4, 'infinity'::timestamptz);
 		`)
 		if err != nil {
-			return dbErr.MapSQLError(err, "ScheduleRepo.UpdateWorkingHour(prepare)")
+			return dbErr.MapSQLError(err, "ScheduleRepo.UpdateWorkingHour(prepare insert open)")
 		}
 		defer stmt.Close()
 
 		for _, tr := range day.Ranges {
 			if !tr.IsValid() {
-				return appErr.NewDomainError(appErr.ErrInvalidInput, "Rango horario inválido en UpdateWorkingHour")
+				return appErr.NewDomainError(
+					appErr.ErrInvalidInput,
+					"Rango horario inválido en UpdateWorkingHour",
+				)
 			}
-			if _, err := stmt.Exec(day.DayOfWeek, tr.Start, tr.End); err != nil {
+			if _, err := stmt.Exec(day.DayOfWeek, tr.Start, tr.End, now); err != nil {
 				return dbErr.MapSQLError(err, "ScheduleRepo.UpdateWorkingHour(insert range)")
 			}
 		}
-
 	} else {
-		// If closed or no ranges → single inactive record
+		// 3️⃣ Closed day → a single inactive version row
 		if _, err := tx.Exec(`
-			INSERT INTO horarios_laborales (dia_semana, hora_apertura, hora_cierre, abierto)
-			VALUES ($1, NULL, NULL, FALSE);
-		`, day.DayOfWeek); err != nil {
+			INSERT INTO horarios_laborales (
+				dia_semana,
+				hora_apertura,
+				hora_cierre,
+				abierto,
+				valid_from,
+				valid_to
+			)
+			VALUES ($1, NULL, NULL, FALSE, $2, 'infinity'::timestamptz);
+		`, day.DayOfWeek, now); err != nil {
 			return dbErr.MapSQLError(err, "ScheduleRepo.UpdateWorkingHour(insert closed)")
 		}
 	}
 
-	// Commit
 	if err := tx.Commit(); err != nil {
 		return dbErr.MapSQLError(err, "ScheduleRepo.UpdateWorkingHour(commit)")
 	}
@@ -403,4 +431,53 @@ func getEnd(d any) *time.Time {
 		}
 	}
 	return nil
+}
+
+func (r *repository) GetWorkingHoursForDate(d time.Time) ([]models.WorkDay, error) {
+	rows, err := r.db.Query(`
+		SELECT id, dia_semana, hora_apertura, hora_cierre, abierto
+		FROM horarios_laborales
+		WHERE valid_from <= $1
+		  AND valid_to   >  $1
+		ORDER BY dia_semana, hora_apertura;
+	`, d)
+	if err != nil {
+		return nil, dbErr.MapSQLError(err, "ScheduleRepo.GetWorkingHoursForDate")
+	}
+	defer rows.Close()
+
+	var result []models.WorkDay
+	for rows.Next() {
+		var (
+			id        int
+			dayOfWeek int
+			openStr   sql.NullString
+			closeStr  sql.NullString
+			active    bool
+		)
+		if err := rows.Scan(&id, &dayOfWeek, &openStr, &closeStr, &active); err != nil {
+			return nil, appErr.Wrap("ScheduleRepo.GetWorkingHoursForDate(scan)", appErr.ErrInternal, err)
+		}
+
+		wd := models.WorkDay{
+			ID:        id,
+			DayOfWeek: dayOfWeek,
+			Active:    active,
+		}
+
+		if active && openStr.Valid && closeStr.Valid {
+			start, _ := time.Parse("15:04:05", openStr.String)
+			end, _ := time.Parse("15:04:05", closeStr.String)
+			loc := timeutil.ClinicLocation()
+
+			wd.Ranges = []models.TimeRange{{
+				Start: time.Date(2000, 1, 1, start.Hour(), start.Minute(), start.Second(), 0, loc),
+				End:   time.Date(2000, 1, 1, end.Hour(), end.Minute(), end.Second(), 0, loc),
+			}}
+		}
+
+		result = append(result, wd)
+	}
+
+	return result, nil
 }
