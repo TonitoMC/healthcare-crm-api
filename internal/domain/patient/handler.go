@@ -26,14 +26,14 @@ func NewHandler(s Service, examService exam.Service, consultationService consult
 }
 
 func (h *Handler) RegisterRoutes(g *echo.Group) {
-	patients := g.Group("/patients")
+	patients := g.Group("/patients", ErrorMiddleware())
 
 	patients.GET("", h.GetAll, middleware.RequirePermission("ver-pacientes"))
 	patients.GET("/:id", h.GetByID, middleware.RequirePermission("ver-pacientes"))
-	patients.GET("/:id/details", h.GetDetails, middleware.RequirePermission("ver-examenes"))
-	patients.POST("", h.Create, middleware.RequirePermission("crear-pacientes"))
-	patients.PUT("/:id", h.Update, middleware.RequirePermission("editar-pacientes"))
-	patients.DELETE("/:id", h.Delete, middleware.RequirePermission("eliminar-pacientes"))
+	patients.GET("/:id/details", h.GetDetails, middleware.RequirePermission("ver-pacientes"))
+	patients.POST("", h.Create, middleware.RequirePermission("manejar-pacientes"))
+	patients.PUT("/:id", h.Update, middleware.RequirePermission("manejar-pacientes"))
+	patients.DELETE("/:id", h.Delete, middleware.RequirePermission("manejar-pacientes"))
 	patients.GET("/search", h.SearchByName, middleware.RequirePermission("ver-pacientes"))
 }
 

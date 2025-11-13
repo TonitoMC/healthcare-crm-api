@@ -20,15 +20,16 @@ func NewHandler(service Service) *Handler {
 
 func (h *Handler) RegisterRoutes(e *echo.Group) {
 	appointments := e.Group("/appointments", ErrorMiddleware())
+
 	appointments.GET("", h.GetBetween, middleware.RequirePermission("ver-citas"))
 	appointments.GET("/:id", h.GetByID, middleware.RequirePermission("ver-citas"))
 	appointments.GET("/today", h.GetToday, middleware.RequirePermission("ver-citas"))
 	appointments.GET("/date/:date", h.GetByDate, middleware.RequirePermission("ver-citas"))
 	appointments.GET("/available-slots/:date", h.GetAvailableSlots, middleware.RequirePermission("ver-citas"))
-	appointments.POST("", h.Create, middleware.RequirePermission("crear-citas"))
-	appointments.POST("/with-new-patient", h.CreateWithNewPatient, middleware.RequirePermission("crear-citas"))
-	appointments.PUT("/:id", h.Update, middleware.RequirePermission("editar-citas"))
-	appointments.DELETE("/:id", h.Delete, middleware.RequirePermission("eliminar-citas"))
+	appointments.POST("", h.Create, middleware.RequirePermission("manejar-citas"))
+	appointments.POST("/with-new-patient", h.CreateWithNewPatient, middleware.RequirePermission("manejar-citas"))
+	appointments.PUT("/:id", h.Update, middleware.RequirePermission("manejar-citas"))
+	appointments.DELETE("/:id", h.Delete, middleware.RequirePermission("manejar-citas"))
 }
 
 func (h *Handler) GetByID(c echo.Context) error {

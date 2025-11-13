@@ -22,7 +22,7 @@ func NewHandler(s Service) *Handler {
 // ===================== ROUTES =====================
 
 func (h *Handler) RegisterRoutes(g *echo.Group) {
-	consultations := g.Group("/consultations")
+	consultations := g.Group("/consultations", ErrorMiddleware())
 
 	// --- Consultations ---
 	consultations.GET("", h.GetAll, middleware.RequirePermission("ver-consultas"))
@@ -46,8 +46,6 @@ func (h *Handler) RegisterRoutes(g *echo.Group) {
 	consultations.POST("/:id/diagnostics/:diagId/treatments", h.CreateTreatment, middleware.RequirePermission("manejar-consultas"))
 	consultations.PUT("/:id/diagnostics/:diagId/treatments/:treatmentId", h.UpdateTreatment, middleware.RequirePermission("manejar-consultas"))
 	consultations.DELETE("/:id/diagnostics/:diagId/treatments/:treatmentId", h.DeleteTreatment, middleware.RequirePermission("manejar-consultas"))
-
-	// Answers
 
 	// --- Answers ---
 	consultations.GET("/:id/answers", h.GetAnswersByConsultation, middleware.RequirePermission("ver-consultas"))

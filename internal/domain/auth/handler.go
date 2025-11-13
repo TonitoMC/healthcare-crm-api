@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"github.com/tonitomc/healthcare-crm-api/internal/api/middleware"
 	authModels "github.com/tonitomc/healthcare-crm-api/internal/domain/auth/models"
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
@@ -22,7 +23,7 @@ func NewHandler(s Service) *Handler {
 // The route group will have error-handling middleware attached externally (via routes.go).
 func (h *Handler) RegisterRoutes(g *echo.Group) {
 	authGroup := g.Group("/auth", ErrorMiddleware())
-	authGroup.POST("/register", h.Register)
+	authGroup.POST("/register", h.Register, middleware.RequirePermission("manejar-usuarios"))
 	authGroup.POST("/login", h.Login)
 }
 

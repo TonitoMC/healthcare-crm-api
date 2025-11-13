@@ -22,7 +22,7 @@ func NewHandler(s Service) *Handler {
 // ===================== ROUTES =====================
 
 func (h *Handler) RegisterRoutes(g *echo.Group) {
-	q := g.Group("/questionnaires")
+	q := g.Group("/questionnaires", ErrorMiddleware())
 
 	q.GET("", h.GetAll, middleware.RequirePermission("ver-cuestionarios"))
 	q.GET("/:id", h.GetByID, middleware.RequirePermission("ver-cuestionarios"))
