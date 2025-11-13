@@ -37,6 +37,8 @@ func (h *Handler) RegisterRoutes(g *echo.Group) {
 	userGroup.POST("/:id/roles/:roleID", h.AddRole, middleware.RequirePermission("manejar-usuarios"))
 	userGroup.DELETE("/:id/roles/:roleID", h.RemoveRole, middleware.RequirePermission("manejar-usuarios"))
 	userGroup.DELETE("/:id/roles", h.ClearRoles, middleware.RequirePermission("manejar-usuarios"))
+
+	userGroup.GET("/enriched", h.GetAllWithRoles, middleware.RequirePermission("manejar-usuarios"))
 }
 
 // -----------------------------------------------------------------------------
@@ -203,4 +205,35 @@ func (h *Handler) ClearRoles(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, echo.Map{"message": "Roles del usuario eliminados correctamente"})
+}
+
+func (h *Handler) GetAllWithRoles(c echo.Context) error {
+	users, err := h.service.GetAllUsers()
+	if err != nil {
+		return err
+	}
+
+	enriched := make([]map[string]interface{}, 0, len(users))
+
+	for _, u := range users {
+		roles, err := h.service.GetUserRoles(u.ID)
+		if err != nil {
+			return err
+		}
+
+		readable := []string{}
+		for _, r := range roles {
+			readable = append(readable, r.Name) // or r.Nombre depending on model
+		}
+
+		enriched = append(enriched, map[string]interface{}{
+			"id":            u.ID,
+			"username":      u.Username,
+			"correo":        u.Email,
+			"roles":         roles,
+			"rolesReadable": readable,
+		})
+	}
+
+	return c.JSON(http.StatusOK, enriched)
 }
