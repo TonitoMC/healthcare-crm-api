@@ -242,8 +242,13 @@ func (s *service) Update(id int, appt *models.AppointmentUpdateDTO) error {
 			}
 			exEnd := ex.Fecha.Add(time.Duration(ex.Duracion) * time.Second)
 			exEndWithGap := exEnd.Add(time.Duration(gapMinutes) * time.Minute)
+
+			// Allow touching appointments e.g. 10:00-10:20 and 10:20-10:40
 			if newFecha.Before(exEndWithGap) && endTimeWithGap.After(ex.Fecha) {
-				return appErr.Wrap("AppointmentService.Update(time slot conflict)", appErr.ErrConflict, nil)
+				// touching allowed
+				if !newFecha.Equal(exEndWithGap) && !endTimeWithGap.Equal(ex.Fecha) {
+					return appErr.Wrap("AppointmentService.Update(time slot conflict)", appErr.ErrConflict, nil)
+				}
 			}
 		}
 
