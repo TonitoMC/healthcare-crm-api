@@ -224,7 +224,7 @@ func (s *service) Update(id int, appt *models.AppointmentUpdateDTO) error {
 			return err
 		}
 		if !withinHours {
-			return appErr.Wrap("AppointmentService.Update(time outside working hours)", appErr.ErrInvalidInput, nil)
+			return appErr.NewDomainError(appErr.ErrConflict, "El horario solicitado se encuentra fuera del horario laboral")
 		}
 
 		const gapMinutes = 0
@@ -247,7 +247,7 @@ func (s *service) Update(id int, appt *models.AppointmentUpdateDTO) error {
 			if newFecha.Before(exEndWithGap) && endTimeWithGap.After(ex.Fecha) {
 				// touching allowed
 				if !newFecha.Equal(exEndWithGap) && !endTimeWithGap.Equal(ex.Fecha) {
-					return appErr.Wrap("AppointmentService.Update(time slot conflict)", appErr.ErrConflict, nil)
+					return appErr.NewDomainError(appErr.ErrConflict, "El horario solicitado traslapa con otras citas")
 				}
 			}
 		}
