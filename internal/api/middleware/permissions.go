@@ -10,40 +10,52 @@ import (
 	appErr "github.com/tonitomc/healthcare-crm-api/pkg/errors"
 )
 
-// normalizePermission converts permission strings to a canonical comparable form
-// e.g. "gestion_citas" => "gestion-citas"
-func normalizePermission(p string) string {
-	p = strings.TrimSpace(p)
-	p = strings.ToLower(p)
-	p = strings.ReplaceAll(p, "_", "-")
-	return p
+// ─────────────────────────────────────────────────────────────
+// PermissionProvider Interface (decouples from userDomain)
+// ─────────────────────────────────────────────────────────────
+
+type PermissionProvider interface {
+	GetRolesAndPermissions(userID int) ([]any, []PermissionLike, error)
 }
 
-// hasPermission checks if the token permissions satisfy the required permission,
-// supporting legacy aliases (e.g., gestion-citas, manejar-citas imply all citas actions).
+type PermissionLike interface {
+	GetName() string
+}
+
+var permissionProvider PermissionProvider
+
+func InjectPermissionProvider(provider PermissionProvider) {
+	permissionProvider = provider
+}
+
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
+
+func normalizePermission(p string) string {
+	p = strings.TrimSpace(strings.ToLower(p))
+	return strings.ReplaceAll(p, "_", "-")
+}
+
 func hasPermission(perms []string, required string) bool {
 	req := normalizePermission(required)
 	for _, raw := range perms {
-		p := normalizePermission(raw)
-		if p == req {
+		if normalizePermission(raw) == req {
 			return true
-		}
-		// Legacy/group aliases for appointments domain
-		if strings.HasSuffix(req, "-citas") {
-			if p == "gestion-citas" || p == "manejar-citas" {
-				return true
-			}
 		}
 	}
 	return false
 }
+
+// ─────────────────────────────────────────────────────────────
+// Middleware
+// ─────────────────────────────────────────────────────────────
 
 func RequirePermission(required string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			token, ok := c.Get("user").(*jwt.Token)
 			if !ok || token == nil {
-				c.Logger().Errorf("[RequirePermission] Missing or invalid JWT token")
 				return c.JSON(http.StatusUnauthorized, echo.Map{
 					"error": "Token no válido o ausente.",
 				})
@@ -51,17 +63,43 @@ func RequirePermission(required string) echo.MiddlewareFunc {
 
 			claims, ok := token.Claims.(*authModels.Claims)
 			if !ok || claims == nil {
-				c.Logger().Errorf("[RequirePermission] Invalid token claims type: %T", token.Claims)
 				return c.JSON(http.StatusUnauthorized, echo.Map{
 					"error": "Estructura de token no válida.",
 				})
 			}
 
-			if hasPermission(claims.Permissions, required) {
+			userID := int(claims.UserID)
+			if userID <= 0 {
+				return c.JSON(http.StatusUnauthorized, echo.Map{
+					"error": "Token sin ID de usuario válido.",
+				})
+			}
+
+			if permissionProvider == nil {
+				c.Logger().Error("[RequirePermission] No permission provider injected")
+				return c.JSON(http.StatusInternalServerError, echo.Map{
+					"error": "No se pudo validar permisos — configuración incompleta.",
+				})
+			}
+
+			_, dbPerms, err := permissionProvider.GetRolesAndPermissions(userID)
+			if err != nil {
+				c.Logger().Errorf("[RequirePermission] DB lookup failed: %v", err)
+				return c.JSON(http.StatusInternalServerError, echo.Map{
+					"error": "No se pudieron verificar los permisos del usuario.",
+				})
+			}
+
+			var perms []string
+			for _, p := range dbPerms {
+				perms = append(perms, p.GetName())
+			}
+
+			if hasPermission(perms, required) || hasPermission(claims.Permissions, required) {
 				return next(c)
 			}
 
-			c.Logger().Errorf("[RequirePermission] Permission '%s' denied. Token claims: %+v", required, claims)
+			c.Logger().Warnf("[RequirePermission] Permission '%s' denied for user %d", required, userID)
 			return c.JSON(http.StatusForbidden, echo.Map{
 				"error": appErr.ErrForbidden.Error(),
 			})

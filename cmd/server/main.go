@@ -75,6 +75,9 @@ func main() {
 	userService := user.NewService(userRepo, roleService)
 	userHandler := user.NewHandler(userService)
 
+	userPermAdapter := adapters.NewUserPermissionAdapter(userService)
+	middlewarePkg.InjectPermissionProvider(userPermAdapter)
+
 	rbacService := rbac.NewService(userService, roleService)
 
 	// Auth Config

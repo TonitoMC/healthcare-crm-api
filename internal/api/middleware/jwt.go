@@ -18,7 +18,6 @@ func JWTMiddleware(secret string) echo.MiddlewareFunc {
 			return new(authModels.Claims)
 		},
 		Skipper: func(c echo.Context) bool {
-			// Skip JWT check for login/register
 			return c.Request().URL.Path == "/api/auth/login"
 		},
 	})
