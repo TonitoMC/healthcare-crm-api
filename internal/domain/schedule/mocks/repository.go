@@ -109,6 +109,21 @@ func (mr *MockRepositoryMockRecorder) GetSpecialHoursByDate(date interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSpecialHoursByDate", reflect.TypeOf((*MockRepository)(nil).GetSpecialHoursByDate), date)
 }
 
+// GetWorkingHoursForDate mocks base method.
+func (m *MockRepository) GetWorkingHoursForDate(date time.Time) ([]models.WorkDay, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWorkingHoursForDate", date)
+	ret0, _ := ret[0].([]models.WorkDay)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetWorkingHoursForDate indicates an expected call of GetWorkingHoursForDate.
+func (mr *MockRepositoryMockRecorder) GetWorkingHoursForDate(date interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWorkingHoursForDate", reflect.TypeOf((*MockRepository)(nil).GetWorkingHoursForDate), date)
+}
+
 // UpdateSpecialHour mocks base method.
 func (m *MockRepository) UpdateSpecialHour(day models.SpecialDay) error {
 	m.ctrl.T.Helper()
