@@ -1,6 +1,6 @@
 package patient
-//go:generate mockgen -source=repository.go -destination=mocks/repository.go -package=mocks
 
+//go:generate mockgen -source=repository.go -destination=mocks/repository.go -package=mocks
 
 import (
 	"database/sql"
@@ -35,7 +35,6 @@ func (r *repository) GetByID(id int) (*models.Patient, error) {
 		FROM pacientes
 		WHERE id = $1
 	`, id).Scan(&p.ID, &p.Nombre, &p.FechaNacimiento, &p.Telefono, &p.Sexo)
-	
 	if err != nil {
 		return nil, database.MapSQLError(err, "PatientRepository.GetByID")
 	}
@@ -81,7 +80,6 @@ func (r *repository) Create(patient *models.PatientCreateDTO) (int, error) {
 		VALUES ($1, $2, $3, $4)
 		RETURNING id
 	`, patient.Nombre, fecha, patient.Telefono, patient.Sexo).Scan(&id)
-
 	if err != nil {
 		return 0, database.MapSQLError(err, "PatientRepository.Create")
 	}
@@ -99,7 +97,6 @@ func (r *repository) Update(id int, patient *models.PatientUpdateDTO) error {
 		SET nombre = $1, fecha_nacimiento = $2, telefono = $3, sexo = $4
 		WHERE id = $5
 	`, patient.Nombre, fecha, patient.Telefono, patient.Sexo, id)
-
 	if err != nil {
 		return database.MapSQLError(err, "PatientRepository.Update")
 	}
@@ -131,7 +128,7 @@ func (r *repository) SearchByName(name string) ([]models.PatientSearchResult, er
 		SELECT id, nombre, telefono, 
 		       EXTRACT(YEAR FROM AGE(fecha_nacimiento))::int as edad
 		FROM pacientes
-		WHERE nombre ILIKE '%' || $1 || '%'
+		WHERE unaccent(nombre) ILIKE '%' || unaccent($1) || '%'
 		ORDER BY nombre
 		LIMIT 20
 	`, name)
