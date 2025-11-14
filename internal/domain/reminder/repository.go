@@ -46,12 +46,13 @@ func (r *repository) Create(rem models.Reminder) (int, error) {
 
 func (r *repository) GetForUser(userID int) ([]models.Reminder, error) {
 	rows, err := r.db.Query(`
-		SELECT id, usuario_id, descripcion, global,
-               fecha_creacion, fecha_completado
-		FROM recordatorios
-		WHERE global = TRUE OR usuario_id = $1
-		ORDER BY fecha_creacion DESC;
-	`, userID)
+	SELECT id, usuario_id, descripcion, global,
+	       fecha_creacion, fecha_completado
+	FROM recordatorios
+	WHERE (global = TRUE OR usuario_id = $1)
+	  AND fecha_completado IS NULL
+	ORDER BY fecha_creacion DESC;
+`, userID)
 	if err != nil {
 		return nil, dbErr.MapSQLError(err, "ReminderRepo.GetForUser")
 	}

@@ -3,6 +3,7 @@ package reminder
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/tonitomc/healthcare-crm-api/internal/api/middleware"
@@ -63,15 +64,37 @@ func (h *Handler) CreateReminder(c echo.Context) error {
 
 func (h *Handler) MarkDone(c echo.Context) error {
 	id, _ := strconv.Atoi(c.Param("id"))
-	return h.service.SetDone(id)
+
+	if err := h.service.SetDone(id); err != nil {
+		return err // middleware will handle
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"success":          true,
+		"fecha_completado": time.Now(),
+	})
 }
 
 func (h *Handler) MarkUndone(c echo.Context) error {
 	id, _ := strconv.Atoi(c.Param("id"))
-	return h.service.SetUndone(id)
+
+	if err := h.service.SetUndone(id); err != nil {
+		return err // middleware will handle
+	}
+
+	return c.JSON(http.StatusOK, map[string]bool{
+		"success": true,
+	})
 }
 
 func (h *Handler) DeleteReminder(c echo.Context) error {
 	id, _ := strconv.Atoi(c.Param("id"))
-	return h.service.Delete(id)
+
+	if err := h.service.Delete(id); err != nil {
+		return err // middleware will handle
+	}
+
+	return c.JSON(http.StatusOK, map[string]bool{
+		"success": true,
+	})
 }
