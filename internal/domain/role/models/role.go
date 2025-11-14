@@ -1,7 +1,7 @@
 package models
 
 type Role struct {
-	ID          int
-	Name        string
-	Description string
+	ID          int    `json:"id"`
+	Name        string `json:"nombre"`
+	Description string `json:"descripcion"`
 }
