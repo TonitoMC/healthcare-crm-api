@@ -1,8 +1,6 @@
 package models
 
-// DTO used for creating a reminder.
-type ReminderCreateDTO struct {
-	UserID      *int   `json:"usuario_id,omitempty"`
-	Description string `json:"descripcion"`
+type CreateReminderRequest struct {
+	Description string `json:"description" validate:"required,min=1"`
 	Global      bool   `json:"global"`
 }
