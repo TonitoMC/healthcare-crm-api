@@ -14,33 +14,33 @@ type ConsultationUpdateDTO struct {
 }
 
 type DiagnosticCreateDTO struct {
-	ConsultaID    int
-	Nombre        string
-	Recomendacion *string
+	ConsultaID    int     `json:"consulta_id"`
+	Nombre        string  `json:"nombre"`
+	Recomendacion *string `json:"recomendacion"`
 }
 
 type DiagnosticUpdateDTO struct {
-	Nombre        string
-	Recomendacion *string
+	Nombre        string  `json:"nombre"`
+	Recomendacion *string `json:"recomendacion"`
 }
 
 type TreatmentCreateDTO struct {
-	Nombre           string
-	DiagnosticoID    int
-	ComponenteActivo string
-	Presentacion     string
-	Dosificacion     string
-	Tiempo           string
-	Frecuencia       string
+	Nombre           string `json:"nombre"`
+	DiagnosticoID    int    `json:"diagnostico_id"`
+	ComponenteActivo string `json:"componente_activo"`
+	Presentacion     string `json:"presentacion"`
+	Dosificacion     string `json:"dosificacion"`
+	Tiempo           string `json:"tiempo"`
+	Frecuencia       string `json:"frecuencia"`
 }
 
 type TreatmentUpdateDTO struct {
-	Nombre           string
-	ComponenteActivo string
-	Presentacion     string
-	Dosificacion     string
-	Tiempo           string
-	Frecuencia       string
+	Nombre           string `json:"nombre"`
+	ComponenteActivo string `json:"componente_activo"`
+	Presentacion     string `json:"presentacion"`
+	Dosificacion     string `json:"dosificacion"`
+	Tiempo           string `json:"tiempo"`
+	Frecuencia       string `json:"frecuencia"`
 }
 
 type AnswersCreateDTO struct {

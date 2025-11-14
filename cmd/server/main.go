@@ -108,6 +108,7 @@ func main() {
 	// MedicalRecord dependencies
 	recordRepo := medicalrecord.NewRepository(db)
 	recordService := medicalrecord.NewService(recordRepo)
+	recordHandler := medicalrecord.NewHandler(recordService)
 
 	// Questionnaire dependencies
 	questionnaireRepo := questionnaire.NewRepository(db)
@@ -136,7 +137,7 @@ func main() {
 	appointmentHandler := appointment.NewHandler(appointmentService)
 	patientHandler := patient.NewHandler(patientService, examService, consultationService, recordService)
 	// ===== Route Registration =====
-	routes.RegisterRoutes(e, authHandler, scheduleHandler, userHandler, roleHandler, patientHandler, consultationHandler, examHandler, appointmentHandler, questionnaireHandler)
+	routes.RegisterRoutes(e, recordHandler, authHandler, scheduleHandler, userHandler, roleHandler, patientHandler, consultationHandler, examHandler, appointmentHandler, questionnaireHandler)
 
 	// ===== Server Start =====
 	e.Logger.Fatal(e.Start(":8080"))
