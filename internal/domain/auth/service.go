@@ -22,6 +22,7 @@ type Service interface {
 	Register(username, email, password string) error
 	Login(identifier, password string) (string, error)
 	ValidateToken(tokenStr string) (*jwt.Token, *authModels.Claims, error)
+	ChangePassword(userID int, oldPassword, newPassword string) error
 }
 
 // -----------------------------------------------------------------------------
@@ -163,4 +164,33 @@ func (s *service) generateJWT(rbacCtx *rbacModels.RBAC) (string, error) {
 	}
 
 	return signed, nil
+}
+
+func (s *service) ChangePassword(userID int, oldPassword, newPassword string) error {
+	if userID <= 0 || oldPassword == "" || newPassword == "" {
+		return appErr.Wrap("AuthService.ChangePassword", appErr.ErrInvalidInput, nil)
+	}
+
+	u, err := s.userService.GetByID(userID)
+	if err != nil {
+		return appErr.Wrap("AuthService.ChangePassword(user)", appErr.ErrInvalidCredentials, err)
+	}
+
+	// verify old password
+	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(oldPassword)); err != nil {
+		return appErr.Wrap("AuthService.ChangePassword(compare)", appErr.ErrInvalidCredentials, err)
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return appErr.Wrap("AuthService.ChangePassword(hash)", appErr.ErrInternal, err)
+	}
+
+	u.PasswordHash = string(hashed)
+
+	if err := s.userService.UpdateUser(u); err != nil {
+		return err
+	}
+
+	return nil
 }

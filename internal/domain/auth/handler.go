@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -25,6 +26,7 @@ func (h *Handler) RegisterRoutes(g *echo.Group) {
 	authGroup := g.Group("/auth", ErrorMiddleware())
 	authGroup.POST("/register", h.Register, middleware.RequirePermission("manejar-usuarios"))
 	authGroup.POST("/login", h.Login)
+	authGroup.POST("/change-password", h.ChangePassword, middleware.RequireAuth())
 }
 
 // -----------------------------------------------------------------------------
@@ -65,5 +67,25 @@ func (h *Handler) Login(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, echo.Map{
 		"token": token,
+	})
+}
+
+func (h *Handler) ChangePassword(c echo.Context) error {
+	var req authModels.ChangePasswordRequest
+	if err := c.Bind(&req); err != nil {
+		return appErr.Wrap("Auth.ChangePassword.Bind", appErr.ErrInvalidRequest, err)
+	}
+
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		return appErr.Wrap("Invalid claims", appErr.ErrUnauthorized, errors.New("Invalid claims"))
+	}
+
+	if err := h.service.ChangePassword(claims.UserID, req.OldPassword, req.NewPassword); err != nil {
+		return err // service already wrapped errors
+	}
+
+	return c.JSON(http.StatusOK, echo.Map{
+		"message": "Contraseña actualizada correctamente",
 	})
 }
