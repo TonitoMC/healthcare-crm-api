@@ -125,8 +125,7 @@ func (r *repository) Delete(id int) error {
 
 func (r *repository) SearchByName(name string) ([]models.PatientSearchResult, error) {
 	rows, err := r.db.Query(`
-		SELECT id, nombre, telefono, 
-		       EXTRACT(YEAR FROM AGE(fecha_nacimiento))::int as edad
+		SELECT id, nombre, telefono, fecha_nacimiento
 		FROM pacientes
 		WHERE unaccent(nombre) ILIKE '%' || unaccent($1) || '%'
 		ORDER BY nombre
@@ -140,7 +139,7 @@ func (r *repository) SearchByName(name string) ([]models.PatientSearchResult, er
 	var results []models.PatientSearchResult
 	for rows.Next() {
 		var r models.PatientSearchResult
-		if err := rows.Scan(&r.ID, &r.Nombre, &r.Telefono, &r.Edad); err != nil {
+		if err := rows.Scan(&r.ID, &r.Nombre, &r.Telefono, &r.FechaNacimiento); err != nil {
 			return nil, appErr.Wrap("PatientRepository.SearchByName(scan)", appErr.ErrInternal, err)
 		}
 		results = append(results, r)

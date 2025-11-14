@@ -29,8 +29,8 @@ type PatientUpdateDTO struct {
 
 // PatientSearchResult para resultados de búsqueda
 type PatientSearchResult struct {
-	ID       int     `json:"id"`
-	Nombre   string  `json:"nombre"`
-	Telefono *string `json:"telefono,omitempty"`
-	Edad     int     `json:"edad"`
+	ID              int     `json:"id"`
+	Nombre          string  `json:"nombre"`
+	Telefono        *string `json:"telefono,omitempty"`
+	FechaNacimiento string  `json:"fecha_nacimiento"`
 }
