@@ -143,6 +143,13 @@ func main() {
 	reminderService := reminder.NewService(reminderRepo)
 	reminderHandler := reminder.NewHandler(reminderService)
 
+	// Health check route
+	e.GET("/healthz", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, echo.Map{
+			"status": "ok",
+		})
+	})
+
 	// ===== Route Registration =====
 	routes.RegisterRoutes(e, recordHandler, reminderHandler, authHandler, scheduleHandler, userHandler, roleHandler, patientHandler, consultationHandler, examHandler, appointmentHandler, questionnaireHandler)
 
