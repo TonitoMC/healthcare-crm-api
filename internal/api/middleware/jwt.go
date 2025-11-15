@@ -20,7 +20,8 @@ func JWTMiddleware(secret string) echo.MiddlewareFunc {
 			return new(authModels.Claims)
 		},
 		Skipper: func(c echo.Context) bool {
-			return c.Request().URL.Path == "/api/auth/login"
+			path := c.Request().URL.Path
+			return path == "/api/auth/login" || path == "/healthz"
 		},
 	})
 }
